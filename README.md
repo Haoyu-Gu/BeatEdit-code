@@ -1,6 +1,6 @@
 # BeatEdit: Symbolic Music Generation as Explicit Editing
 
-Official implementation for the ACM Multimedia 2026 paper.
+Official implementation for the ACM Multimedia 2026 paper. 
 
 - **Demo page** (audio samples, piano rolls, MIDI player): https://haoyu-gu.github.io/BeatEdit/
 - Demo repository: https://github.com/Haoyu-Gu/BeatEdit
