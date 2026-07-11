@@ -1,0 +1,98 @@
+{
+  "B (Rel, Sep)": {
+    "n_trials": 9887,
+    "mean_changed": 4.677252958430262,
+    "median_changed": 4.0,
+    "max_changed": 10,
+    "cascade_rate": 1.0,
+    "mean_beat_size": 5.998483316481294,
+    "distribution": {
+      "1_note": 0.0,
+      "2_3_notes": 0.37776878729644986,
+      "4_5_notes": 0.28724587842621624,
+      "6plus_notes": 0.33498533427733385
+    },
+    "by_position": {
+      "pos_0": {
+        "n": 1978,
+        "mean_changed": 5.998483316481294
+      },
+      "pos_1": {
+        "n": 1757,
+        "mean_changed": 5.501422879908936
+      },
+      "pos_2": {
+        "n": 1538,
+        "mean_changed": 5.0
+      },
+      "pos_3": {
+        "n": 1302,
+        "mean_changed": 4.543778801843318
+      },
+      "pos_4": {
+        "n": 1094,
+        "mean_changed": 4.027422303473492
+      },
+      "pos_5": {
+        "n": 865,
+        "mean_changed": 3.564161849710983
+      },
+      "pos_6": {
+        "n": 673,
+        "mean_changed": 3.010401188707281
+      },
+      "pos_7": {
+        "n": 448,
+        "mean_changed": 2.517857142857143
+      }
+    }
+  },
+  "A (Abs, Sep)": {
+    "n_trials": 1572,
+    "mean_changed": 1.0,
+    "median_changed": 1.0,
+    "max_changed": 1,
+    "cascade_rate": 0.0,
+    "mean_beat_size": 4.137724550898204,
+    "distribution": {
+      "1_note": 1.0,
+      "2_3_notes": 0.0,
+      "4_5_notes": 0.0,
+      "6plus_notes": 0.0
+    },
+    "by_position": {
+      "pos_0": {
+        "n": 501,
+        "mean_changed": 1.0
+      },
+      "pos_1": {
+        "n": 364,
+        "mean_changed": 1.0
+      },
+      "pos_2": {
+        "n": 247,
+        "mean_changed": 1.0
+      },
+      "pos_3": {
+        "n": 180,
+        "mean_changed": 1.0
+      },
+      "pos_4": {
+        "n": 118,
+        "mean_changed": 1.0
+      },
+      "pos_5": {
+        "n": 77,
+        "mean_changed": 1.0
+      },
+      "pos_6": {
+        "n": 46,
+        "mean_changed": 1.0
+      },
+      "pos_7": {
+        "n": 25,
+        "mean_changed": 1.0
+      }
+    }
+  }
+}

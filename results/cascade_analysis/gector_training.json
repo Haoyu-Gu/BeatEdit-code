@@ -1,0 +1,68 @@
+{
+  "BEAT_A": {
+    "mlm_ppl": 1.39,
+    "s1_editf1": 0.843,
+    "s1_loss": 0.148,
+    "s3_editf1": 0.855,
+    "s3_loss": 0.147,
+    "delta": 0.012
+  },
+  "BEAT_B": {
+    "mlm_ppl": 1.29,
+    "s1_editf1": 0.863,
+    "s1_loss": 0.144,
+    "s3_editf1": 0.862,
+    "s3_loss": 0.145,
+    "delta": -0.001
+  },
+  "BEAT_C": {
+    "mlm_ppl": 1.63,
+    "s1_editf1": 0.874,
+    "s1_loss": 0.239,
+    "s3_editf1": 0.873,
+    "s3_loss": 0.24,
+    "delta": -0.001
+  },
+  "BEAT_D": {
+    "mlm_ppl": 1.83,
+    "s1_editf1": 0.843,
+    "s1_loss": 0.243,
+    "s3_editf1": 0.843,
+    "s3_loss": 0.244,
+    "delta": 0.0
+  },
+  "REMI": {
+    "mlm_ppl": 1.39,
+    "s1_editf1": 0.72,
+    "s1_loss": 0.061,
+    "s3_editf1": 0.732,
+    "s3_loss": 0.056,
+    "delta": 0.012
+  },
+  "CPWord": {
+    "mlm_ppl": 497.8,
+    "s1_editf1": 0.509,
+    "s1_loss": 2.582,
+    "s3_editf1": 0.524,
+    "s3_loss": 2.558,
+    "delta": 0.015,
+    "note": "Compound tokens, loss not comparable"
+  },
+  "Structured": {
+    "mlm_ppl": 1.57,
+    "s1_editf1": 0.697,
+    "s1_loss": 0.065,
+    "s3_editf1": 0.711,
+    "s3_loss": 0.066,
+    "delta": 0.014
+  },
+  "MIDILike": {
+    "mlm_ppl": 8.18,
+    "s1_editf1": 0.369,
+    "s1_loss": 1.584,
+    "s3_editf1": 0.294,
+    "s3_loss": null,
+    "delta": -0.075,
+    "note": "S3 early-stopped after 1/3 epoch, degraded"
+  }
+}

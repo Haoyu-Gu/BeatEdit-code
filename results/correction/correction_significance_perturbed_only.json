@@ -1,0 +1,502 @@
+{
+  "no_edit_vs_cmlm": {
+    "A": {
+      "beat_exact_match": {
+        "method_a_mean": 0.03,
+        "method_b_mean": 0.2375,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.2075,
+          "ci95_diff": [
+            -0.2286,
+            -0.187
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 92.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    },
+    "D": {
+      "beat_exact_match": {
+        "method_a_mean": 0.03,
+        "method_b_mean": 0.3881,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.3581,
+          "ci95_diff": [
+            -0.3798,
+            -0.3367
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 5.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    }
+  },
+  "no_edit_vs_felix": {
+    "A": {
+      "beat_exact_match": {
+        "method_a_mean": 0.03,
+        "method_b_mean": 0.3567,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.3267,
+          "ci95_diff": [
+            -0.3515,
+            -0.2991
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 384.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    },
+    "D": {
+      "beat_exact_match": {
+        "method_a_mean": 0.03,
+        "method_b_mean": 0.3288,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.2988,
+          "ci95_diff": [
+            -0.3187,
+            -0.2792
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 1.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    }
+  },
+  "no_edit_vs_gector": {
+    "A": {
+      "beat_exact_match": {
+        "method_a_mean": 0.03,
+        "method_b_mean": 0.7003,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.6703,
+          "ci95_diff": [
+            -0.6977,
+            -0.6419
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 0.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    },
+    "D": {
+      "beat_exact_match": {
+        "method_a_mean": 0.03,
+        "method_b_mean": 0.7002,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.6702,
+          "ci95_diff": [
+            -0.6986,
+            -0.6419
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 0.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    }
+  },
+  "no_edit_vs_levt_editing_v2": {
+    "A": {
+      "beat_exact_match": {
+        "method_a_mean": 0.03,
+        "method_b_mean": 0.7189,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.6889,
+          "ci95_diff": [
+            -0.7196,
+            -0.657
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 0.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    },
+    "D": {
+      "beat_exact_match": {
+        "method_a_mean": 0.03,
+        "method_b_mean": 0.568,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.538,
+          "ci95_diff": [
+            -0.5714,
+            -0.5055
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 0.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    }
+  },
+  "cmlm_vs_felix": {
+    "A": {
+      "beat_exact_match": {
+        "method_a_mean": 0.2375,
+        "method_b_mean": 0.3567,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.1192,
+          "ci95_diff": [
+            -0.1494,
+            -0.0893
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 2575.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    },
+    "D": {
+      "beat_exact_match": {
+        "method_a_mean": 0.3881,
+        "method_b_mean": 0.3288,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": 0.0593,
+          "ci95_diff": [
+            0.0346,
+            0.083
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 1e-06,
+          "statistic": 4170.5,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    }
+  },
+  "cmlm_vs_gector": {
+    "A": {
+      "beat_exact_match": {
+        "method_a_mean": 0.2375,
+        "method_b_mean": 0.7003,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.4628,
+          "ci95_diff": [
+            -0.4915,
+            -0.4354
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 22.5,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    },
+    "D": {
+      "beat_exact_match": {
+        "method_a_mean": 0.3881,
+        "method_b_mean": 0.7002,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.3121,
+          "ci95_diff": [
+            -0.3373,
+            -0.2869
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 242.5,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    }
+  },
+  "cmlm_vs_levt_editing_v2": {
+    "A": {
+      "beat_exact_match": {
+        "method_a_mean": 0.2375,
+        "method_b_mean": 0.7189,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.4814,
+          "ci95_diff": [
+            -0.5146,
+            -0.4481
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 35.5,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    },
+    "D": {
+      "beat_exact_match": {
+        "method_a_mean": 0.3881,
+        "method_b_mean": 0.568,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.1799,
+          "ci95_diff": [
+            -0.2118,
+            -0.149
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 1935.5,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    }
+  },
+  "felix_vs_gector": {
+    "A": {
+      "beat_exact_match": {
+        "method_a_mean": 0.3567,
+        "method_b_mean": 0.7003,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.3436,
+          "ci95_diff": [
+            -0.3701,
+            -0.3169
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 141.5,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    },
+    "D": {
+      "beat_exact_match": {
+        "method_a_mean": 0.3288,
+        "method_b_mean": 0.7002,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.3714,
+          "ci95_diff": [
+            -0.3948,
+            -0.348
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 77.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    }
+  },
+  "felix_vs_levt_editing_v2": {
+    "A": {
+      "beat_exact_match": {
+        "method_a_mean": 0.3567,
+        "method_b_mean": 0.7189,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.3622,
+          "ci95_diff": [
+            -0.3897,
+            -0.3347
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 154.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    },
+    "D": {
+      "beat_exact_match": {
+        "method_a_mean": 0.3288,
+        "method_b_mean": 0.568,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": -0.2392,
+          "ci95_diff": [
+            -0.2647,
+            -0.215
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 45.0,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    }
+  },
+  "gector_vs_levt_editing_v2": {
+    "A": {
+      "beat_exact_match": {
+        "method_a_mean": 0.7003,
+        "method_b_mean": 0.7189,
+        "paired_bootstrap": {
+          "p_value": 0.0714,
+          "observed_diff": -0.0186,
+          "ci95_diff": [
+            -0.0387,
+            0.0018
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": false,
+          "significant_001": false
+        },
+        "wilcoxon": {
+          "p_value": 0.112721,
+          "statistic": 5296.5,
+          "significant_005": false,
+          "significant_001": false
+        }
+      }
+    },
+    "D": {
+      "beat_exact_match": {
+        "method_a_mean": 0.7002,
+        "method_b_mean": 0.568,
+        "paired_bootstrap": {
+          "p_value": 0.0,
+          "observed_diff": 0.1322,
+          "ci95_diff": [
+            0.104,
+            0.1594
+          ],
+          "n_samples": 200,
+          "n_bootstrap": 10000,
+          "significant_005": true,
+          "significant_001": true
+        },
+        "wilcoxon": {
+          "p_value": 0.0,
+          "statistic": 2084.5,
+          "significant_005": true,
+          "significant_001": true
+        }
+      }
+    }
+  }
+}

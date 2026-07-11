@@ -1,0 +1,258 @@
+{
+  "method": "oracle_75",
+  "scheme": "B",
+  "task": "inpainting",
+  "scope": "perturbed_only",
+  "num_samples": 50,
+  "num_errors": 0,
+  "overall": {
+    "beat_exact_match": {
+      "mean": 0.7039,
+      "std": 0.1177,
+      "median": 0.75
+    },
+    "note_f1_tol0": {
+      "mean": 0.7121,
+      "std": 0.1534,
+      "median": 0.75
+    },
+    "note_f1_tol2": {
+      "mean": 0.7371,
+      "std": 0.1603,
+      "median": 0.7795
+    },
+    "note_f1_tol4": {
+      "mean": 0.7494,
+      "std": 0.1629,
+      "median": 0.7906
+    },
+    "chroma_f1": {
+      "mean": 0.7483,
+      "std": 0.1546,
+      "median": 0.7863
+    },
+    "mean_pitch_error": {
+      "mean": 11.3624,
+      "std": 8.3682,
+      "median": 8.519
+    },
+    "token_accuracy": {
+      "mean": 0.7123,
+      "std": 0.1235,
+      "median": 0.75
+    },
+    "rhythm_similarity": {
+      "mean": 0.9421,
+      "std": 0.1936,
+      "median": 0.9878
+    },
+    "bert_cosine_sim": {
+      "mean": 0.9937,
+      "std": 0.0041,
+      "median": 0.9948
+    }
+  },
+  "per_level": {
+    "L1": {
+      "count": 11,
+      "metrics": {
+        "beat_exact_match": {
+          "mean": 0.7118,
+          "std": 0.0877,
+          "median": 0.75
+        },
+        "note_f1_tol0": {
+          "mean": 0.7038,
+          "std": 0.1566,
+          "median": 0.7442
+        },
+        "note_f1_tol2": {
+          "mean": 0.7352,
+          "std": 0.1683,
+          "median": 0.8
+        },
+        "note_f1_tol4": {
+          "mean": 0.7486,
+          "std": 0.1722,
+          "median": 0.8
+        },
+        "chroma_f1": {
+          "mean": 0.7373,
+          "std": 0.1551,
+          "median": 0.7857
+        },
+        "mean_pitch_error": {
+          "mean": 10.9601,
+          "std": 9.8324,
+          "median": 7.0149
+        },
+        "token_accuracy": {
+          "mean": 0.7324,
+          "std": 0.0997,
+          "median": 0.75
+        },
+        "rhythm_similarity": {
+          "mean": 0.8827,
+          "std": 0.2798,
+          "median": 0.9723
+        },
+        "bert_cosine_sim": {
+          "mean": 0.9968,
+          "std": 0.0017,
+          "median": 0.9974
+        }
+      }
+    },
+    "L2": {
+      "count": 18,
+      "metrics": {
+        "beat_exact_match": {
+          "mean": 0.7065,
+          "std": 0.1316,
+          "median": 0.75
+        },
+        "note_f1_tol0": {
+          "mean": 0.7437,
+          "std": 0.1037,
+          "median": 0.7505
+        },
+        "note_f1_tol2": {
+          "mean": 0.765,
+          "std": 0.1092,
+          "median": 0.7849
+        },
+        "note_f1_tol4": {
+          "mean": 0.7757,
+          "std": 0.109,
+          "median": 0.7914
+        },
+        "chroma_f1": {
+          "mean": 0.7836,
+          "std": 0.0856,
+          "median": 0.7946
+        },
+        "mean_pitch_error": {
+          "mean": 10.0953,
+          "std": 5.719,
+          "median": 8.519
+        },
+        "token_accuracy": {
+          "mean": 0.7156,
+          "std": 0.1328,
+          "median": 0.7511
+        },
+        "rhythm_similarity": {
+          "mean": 0.9908,
+          "std": 0.01,
+          "median": 0.9962
+        },
+        "bert_cosine_sim": {
+          "mean": 0.9939,
+          "std": 0.0045,
+          "median": 0.9956
+        }
+      }
+    },
+    "L3": {
+      "count": 14,
+      "metrics": {
+        "beat_exact_match": {
+          "mean": 0.7089,
+          "std": 0.0972,
+          "median": 0.7424
+        },
+        "note_f1_tol0": {
+          "mean": 0.678,
+          "std": 0.2109,
+          "median": 0.7506
+        },
+        "note_f1_tol2": {
+          "mean": 0.6976,
+          "std": 0.2172,
+          "median": 0.7793
+        },
+        "note_f1_tol4": {
+          "mean": 0.7129,
+          "std": 0.222,
+          "median": 0.7906
+        },
+        "chroma_f1": {
+          "mean": 0.7154,
+          "std": 0.2231,
+          "median": 0.7849
+        },
+        "mean_pitch_error": {
+          "mean": 13.3039,
+          "std": 10.5136,
+          "median": 8.9497
+        },
+        "token_accuracy": {
+          "mean": 0.7088,
+          "std": 0.1101,
+          "median": 0.7244
+        },
+        "rhythm_similarity": {
+          "mean": 0.9057,
+          "std": 0.253,
+          "median": 0.9843
+        },
+        "bert_cosine_sim": {
+          "mean": 0.9925,
+          "std": 0.0038,
+          "median": 0.9933
+        }
+      }
+    },
+    "L4": {
+      "count": 7,
+      "metrics": {
+        "beat_exact_match": {
+          "mean": 0.6752,
+          "std": 0.1498,
+          "median": 0.7576
+        },
+        "note_f1_tol0": {
+          "mean": 0.7122,
+          "std": 0.0894,
+          "median": 0.75
+        },
+        "note_f1_tol2": {
+          "mean": 0.7478,
+          "std": 0.0936,
+          "median": 0.7542
+        },
+        "note_f1_tol4": {
+          "mean": 0.7559,
+          "std": 0.0964,
+          "median": 0.7542
+        },
+        "chroma_f1": {
+          "mean": 0.7405,
+          "std": 0.0949,
+          "median": 0.7869
+        },
+        "mean_pitch_error": {
+          "mean": 11.3699,
+          "std": 5.5835,
+          "median": 10.2902
+        },
+        "token_accuracy": {
+          "mean": 0.6789,
+          "std": 0.1476,
+          "median": 0.7548
+        },
+        "rhythm_similarity": {
+          "mean": 0.9833,
+          "std": 0.0191,
+          "median": 0.9904
+        },
+        "bert_cosine_sim": {
+          "mean": 0.9906,
+          "std": 0.003,
+          "median": 0.991
+        }
+      }
+    }
+  },
+  "fmd": 0.8726
+}

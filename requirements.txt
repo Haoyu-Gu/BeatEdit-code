@@ -1,0 +1,23 @@
+# BeatEdit: Symbolic Music Generation as Explicit Editing
+# Python >= 3.9
+
+# Core
+torch>=2.0.0
+numpy>=1.24.0
+
+# Transformers & Training
+transformers>=4.30.0
+accelerate>=0.20.0
+safetensors>=0.3.0
+
+# Music Processing
+miditok>=2.1.0
+pretty_midi>=0.2.10
+symusic>=0.4.0          # REMI/CPWord baseline tokenizers
+
+# Evaluation & Statistics
+scipy>=1.10.0
+scikit-learn>=1.2.0
+
+# Logging
+tensorboard>=2.13.0
