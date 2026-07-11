@@ -1,609 +1,799 @@
-# 方法论：基于 Levenshtein Transformer 的符号音乐修复
+# Method: Levenshtein-Transformer-Based Symbolic Music Editing (IterEdit)
 
-> 本文档聚焦方法的创新点与设计合理性，面向论文写作 / 答辩使用。
-> 更新: 2026-02-19 | 版本: 3.0 (新增 §9 声部协调编辑 + §10 对比实验设计)
+> Design notes for **IterEdit** (paper §3.3), the iterative deletion–insertion–prediction
+> mechanism of BeatEdit. This document focuses on the rationale behind the design
+> choices; it is written as background for the paper and for readers of the code.
+>
+> Where a design discussed here was explored during development but did not make it
+> into the released model (or was measured and found harmful), this is stated
+> explicitly in a **Status** note. The released implementation lives in
+> `src/iteredit/`.
 
 ---
 
-## 1. 研究动机
+## 1. Motivation
 
-### 1.1 为什么做符号音乐修复（Symbolic Music Inpainting）
+### 1.1 Why symbolic music inpainting?
 
-符号音乐修复是指：给定一段 MIDI 序列，其中某一区域被遮盖（例如 4~8 小节的旋律缺失），模型需要生成与上下文风格连贯、结构合理的补全片段。
+Symbolic music inpainting means: given a MIDI sequence in which some region is masked
+out (e.g. 4–8 bars of melody are missing), the model must generate a completion that is
+stylistically coherent with the surrounding context and structurally sound.
 
-这个任务在实际音乐创作中有直接价值：
-- **辅助作曲**：作曲者写好首尾，由模型填充中间过渡段
-- **音乐修复**：恢复损坏或缺失的乐谱片段
-- **条件生成**：在给定旋律框架下生成伴奏
+The task has direct value in real music creation:
+- **Composition assistance**: the composer writes the opening and the ending, and the model fills the transition in between.
+- **Score restoration**: recovering damaged or missing passages of a score.
+- **Conditional generation**: generating an accompaniment under a given melodic skeleton.
 
-与自由生成（unconditional generation）不同，修复任务的核心难点在于**双向一致性**——生成片段必须同时与左侧上文和右侧下文衔接。这对纯自回归（AR）模型构成天然挑战，因为 AR 只能看到左侧上文。
+Unlike unconditional generation, the core difficulty of inpainting is **bidirectional
+consistency** — the generated fragment must join up with both the left and the right
+context. This is a natural obstacle for purely autoregressive (AR) models, which can
+only see the left context.
 
-### 1.2 现有方法的局限
+In BeatEdit, IterEdit is the mechanism for the **medium-to-high edit-density** regime:
+accompaniment editing (its primary task), error correction, and segment completion.
 
-| 方法类别 | 代表工作 | 局限 |
-|---------|---------|------|
-| 自回归（AR） | Music Transformer, MuseNet | 单向生成，无法利用右侧上文；修复需额外 infilling trick |
-| 掩码语言模型（MLM） | MusicBERT, Mask-Predict | 一次预测所有位置，无法处理**长度不确定**的修复（原始序列与目标长度不同） |
-| 扩散模型 | DiffuSeq, DDPM for music | 计算量大，迭代步数多，符号离散域需额外量化 |
-| Seq2Seq | Encoder-Decoder | 需要将修复建模为翻译问题，上下文利用不自然 |
+### 1.2 Limitations of existing approaches
 
-**核心矛盾**：音乐修复的目标序列**长度不确定**。掩盖 4 小节后，目标区域可能是 50 个 token，也可能是 200 个——这取决于该区域的音乐密度。固定长度的 BERT 式 mask-predict 无法处理这种情况。
+| Method family | Representative work | Limitation |
+|---------------|--------------------|------------|
+| Autoregressive (AR) | Music Transformer, MuseNet | Unidirectional generation; cannot use the right context; inpainting needs an extra infilling trick |
+| Masked language models (MLM) | MusicBERT, Mask-Predict | Predicts all positions at once; cannot handle inpainting where the **length is unknown** (the source and target lengths differ) |
+| Diffusion models | DiffuSeq, DDPM for music | Expensive; many iteration steps; the discrete symbolic domain needs extra quantization |
+| Seq2Seq | Encoder–Decoder | Forces inpainting into a translation formulation; context is used unnaturally |
 
-### 1.3 为什么选择 Levenshtein Transformer
+**The central tension**: the target sequence of a music inpainting task has an
+**unknown length**. After masking 4 bars, the target region might be 50 tokens or 200 —
+it depends on the note density of that region. Fixed-length BERT-style mask-predict
+cannot handle this.
 
-Levenshtein Transformer（Gu et al., 2019）原本是机器翻译中的非自回归（NAR）方法，其核心思路是将序列生成分解为三种编辑操作：
+### 1.3 Why the Levenshtein Transformer?
+
+The Levenshtein Transformer (Gu et al., 2019) was originally a non-autoregressive (NAR)
+method for machine translation. Its core idea is to decompose sequence generation into
+three edit policies:
 
 $$\text{Delete} \rightarrow \text{Insert Placeholders} \rightarrow \text{Fill Tokens}$$
 
-这种 **"编辑式生成"** 天然适配音乐修复场景：
+This **"generation as editing"** view fits music inpainting naturally:
 
-1. **长度自适应**：Insertion Head 预测每个间隙插入多少占位符，自动推断目标长度，不需要预先指定
-2. **双向上下文**：Encoder-only 架构天然利用全局注意力，左右上下文同时可见
-3. **迭代纠错**：多轮 delete→insert→fill 逐步逼近目标，而非一次赌博式预测所有 token
-4. **上下文保护**：通过受约束的 Levenshtein DP，可以冻结上下文区域，只编辑掩码区
+1. **Length adaptivity**: the placeholder-insertion policy predicts how many placeholders to insert in each gap, inferring the target length automatically — no need to specify it in advance.
+2. **Bidirectional context**: an encoder-only architecture gives global attention, so the left and right context are visible at once.
+3. **Iterative correction**: several rounds of delete → insert → fill approach the target progressively, instead of gambling on predicting every token in one shot.
+4. **Context protection**: with a constrained Levenshtein DP, the context region can be frozen so that only the masked region is edited.
 
-**我们的贡献**：将 Levenshtein Transformer 从 NLP 翻译任务迁移到符号音乐修复，并针对音乐领域的特殊性进行了系统性适配。
-
----
-
-## 2. 方法概览
-
-整体流程如下图所示：
-
-```
-完整 MIDI 序列
-      ↓
-[上文] ████遮盖区域████ [下文]        ← 创建修复对（beat-boundary masking）
-      ↓
-[上文] [PLH] [下文]                  ← 初始状态：1 个占位符
-      ↓
-┌──────────────────────────────────┐
-│  迭代循环 (最多 10 轮)             │
-│  ① Delete Head: 删除错误 token    │
-│  ② Insert Head: 在间隙插入 PLH    │
-│  ③ Token Head: 用真实 token 填充   │
-│  收敛条件: 无任何编辑操作 → 停止    │
-└──────────────────────────────────┘
-      ↓
-[上文] [生成的修复片段] [下文]         ← 最终输出
-```
-
-**核心创新点概括**：
-
-| 创新 | 描述 |
-|------|------|
-| **带约束的 Levenshtein DP** | 仅在掩码区域内计算编辑距离，上下文区域冻结不参与 DP |
-| **Beat-boundary masking** | 按音乐节拍边界掩盖，而非随机 token 位置 |
-| **Per-token editable flags** | 用布尔标志替代脆弱的索引边界追踪，推理时鲁棒维护可编辑区域 |
-| **2×2 编码方案实验设计** | 系统对比 relative/absolute × unbundled/bundled 四种音乐表示 |
-| **Music BERT 预训练初始化** | 利用音乐领域 MLM 预训练的编码器权重热启动 |
-| **Track-aware Attention Bias** | 可学习的声部关系偏置注入 attention (§9.2) |
-| **条件式声部修复** | 支持给定一个声部修复另一个声部 (§9.3) |
-| **系统性对比实验** | 3 个 baseline + 5 项消融 + 多维度评估指标 (§10) |
+**Our contribution**: porting the Levenshtein Transformer from NLP translation to
+symbolic music editing, with systematic adaptations for the specifics of the music
+domain.
 
 ---
 
-## 3. 音乐表示：四种编码方案的设计
+## 2. Method Overview
 
-### 3.1 设计动机
-
-符号音乐（MIDI）本质上是**二维钢琴卷**（pitch × time），需要序列化为一维 token 序列才能送入 Transformer。序列化方式直接决定：
-- 词汇表大小（影响预测难度）
-- 序列长度（影响注意力计算量）
-- 是否具有平移不变性（影响泛化能力）
-
-我们设计了 **2×2 正交实验**，在两个独立维度上各取两种方案：
-
-|  | Unbundled（分离式） | Bundled（捆绑式） |
-|--|---------------------|-------------------|
-| **Relative（相对位置）** | Scheme A (vocab=186) | Scheme C (vocab=7146) |
-| **Absolute（绝对位置）** | Scheme B (vocab=187) | Scheme D (vocab=7146) |
-
-### 3.2 Pitch 编码基础：Ternary Patch
-
-所有方案共享相同的**音符状态编码**。钢琴卷中每个 2×2 patch 被编码为 4 位三进制数：
+The overall pipeline:
 
 ```
-patch = [onset_ch0, onset_ch1, sustain_ch0, sustain_ch1]
-每位取值 {0, 1, 2}:  0=无音符, 1=延续, 2=起音+延续
+Complete MIDI sequence
+      ↓
+[context] ████masked region████ [context]   ← create the inpainting pair (beat-boundary masking)
+      ↓
+[context] [PLH] [context]                   ← initial state: a single placeholder
+      ↓
+┌────────────────────────────────────────┐
+│  Iterative loop (max 10 rounds)         │
+│  ① Deletion:    delete wrong tokens     │
+│  ② Insertion:   insert PLH into gaps    │
+│  ③ Token pred.: fill PLH with real tok. │
+│  Convergence: no edit of any kind → stop│
+└────────────────────────────────────────┘
+      ↓
+[context] [generated fragment] [context]    ← final output
+```
+
+**Summary of the design contributions:**
+
+| Contribution | Description |
+|--------------|-------------|
+| **Constrained Levenshtein DP** | The edit distance is computed only inside the masked region; the context is frozen and takes no part in the DP |
+| **Beat-boundary masking** | Masking follows musical beat boundaries instead of random token positions |
+| **Per-token editable flags** | Boolean flags replace fragile index-based boundary tracking, so the editable region is maintained robustly during inference |
+| **2×2 encoding-scheme study** | A systematic comparison of absolute/relative × separated/bundled music representations |
+| **Music BERT pre-trained initialization** | Warm-starting the encoder from music-domain MLM pre-training |
+| **Multi-level perturbation training** | Four perturbation levels (L1–L4) plus intermediate-state sampling, so the model generalizes beyond contiguous masking (§5) |
+
+---
+
+## 3. Music Representation: the Four Encoding Schemes
+
+### 3.1 Design rationale
+
+Symbolic music (MIDI) is essentially a **two-dimensional piano roll** (pitch × time) and
+has to be serialized into a one-dimensional token sequence before it can be fed to a
+Transformer. The serialization directly determines:
+- the vocabulary size (which affects how hard prediction is),
+- the sequence length (which affects the attention cost),
+- whether the representation is translation-invariant (which affects generalization).
+
+We use a **2×2 factorial design**, taking two options along each of two independent axes:
+
+|  | Separated (unbundled) | Bundled |
+|--|-----------------------|---------|
+| **Absolute position** | Scheme A (vocab = 186) | Scheme D (vocab = 7145) |
+| **Relative position** | Scheme B (vocab = 185) | Scheme C (vocab = 7145) |
+
+The vocabulary sizes above are the model vocabularies of the shared Music BERT backbone
+(base vocabulary + `[MASK]`). IterEdit adds one more symbol, the `[PLH]` placeholder, so
+its own vocabulary is 7146 for Schemes C/D (see `src/iteredit/configs/config.py`, whose
+constants are stated for Scheme C, and `SCHEME_TOKENS` in
+`src/iteredit/data/dataset_editing.py`, which covers all four schemes).
+
+### 3.2 The pitch-encoding primitive: the ternary patch
+
+All four schemes share the same **note-state encoding**. The piano roll is cut into
+patches of `patch_h = 1` pitch × `patch_w = 4` time steps, and each patch is encoded as a
+4-digit ternary number — one digit per time step:
+
+```
+patch = [d0, d1, d2, d3]           # four consecutive time steps at one pitch
+each digit ∈ {0, 1, 2}:  0 = silent, 1 = onset, 2 = sustain continuation
 patch_value = d[0]×27 + d[1]×9 + d[2]×3 + d[3]×1  ∈ [0, 80]
 ```
 
-共 $3^4 = 81$ 种 patch 值，这构成音符内容的基本表达单元。
+There are $3^4 = 81$ patch values, and these are the basic unit in which note content is
+expressed. Two examples, to fix the convention:
 
-### 3.3 维度一：Relative vs Absolute 位置编码
+- a quarter note (an onset held for the whole beat) is `(1,2,2,2)` = **53**;
+- a beat of pure sustain, with no new attack, is `(2,2,2,2)` = **80**.
 
-**Relative（相对位置，Scheme A/C）**：
+### 3.3 Axis one: relative vs. absolute position encoding
+
+**Relative (Schemes B/C):**
 ```
-token[i] 的位置 = token[i-1] 的位置 + relative_distance[i]
+position of token[i] = position of token[i-1] + relative_distance[i]
 ```
-- 优势：**平移不变性**——将乐句整体移调后，相对编码不变，有助于泛化
-- 优势：稀疏乐段（音符间距大）的位置值更小，分布更集中
-- 劣势：解码需要**累积求和**，单个位置错误会级联传播
+- Advantage: **translation invariance** — transposing a phrase leaves the relative encoding unchanged, which helps generalization.
+- Advantage: in sparse passages (large pitch gaps between notes) the position values are smaller and more concentrated.
+- Drawback: decoding requires a **cumulative sum**, so a single positional error cascades to everything that follows.
 
-**Absolute（绝对位置，Scheme B/D）**：
+**Absolute (Schemes A/D):**
 ```
-token[i] 的位置 = 直接的 pitch_index ∈ [0, 87]
+position of token[i] = the pitch index directly, ∈ [0, 87]
 ```
-- 优势：**每个 token 独立可解**，无误差传播风险
-- 优势：更适合并行解码
-- 劣势：丧失平移不变性，移调后编码完全不同
+- Advantage: **every token is independently decodable**; there is no error propagation.
+- Advantage: better suited to parallel decoding.
+- Drawback: translation invariance is lost — a transposed passage encodes completely differently.
 
-**实验假设**：Relative 编码的平移不变性能提升泛化能力，但累积误差可能在迭代修复中被放大；Absolute 编码虽丧失不变性但对迭代修复更鲁棒。
+**Hypothesis (and outcome).** We expected relative encoding's translation invariance to
+help generalization, at the risk that its cumulative error would be amplified across
+iterations. The measured result confirms the risk and not the benefit: for IterEdit,
+absolute encoding is consistently better, precisely because relative encoding's
+cascading dependencies compound across refinement rounds (paper §5.3).
 
-### 3.4 维度二：Unbundled vs Bundled token 风格
+### 3.4 Axis two: separated vs. bundled token organization
 
-**Unbundled（分离式，Scheme A/B）**：
-每个音符用**两个 token** 表示——位置 token + 内容 token：
+**Separated (Schemes A/B).** Each note is represented by **two tokens** — a position
+token plus a content token:
 ```
 [81 + position, patch_value]    → 2 tokens/note
-词汇表: 81(patch) + 88(position) + 特殊token ≈ 186
+vocabulary: 81 (patch) + 88 (position) + special tokens ≈ 186
 ```
 
-**Bundled（捆绑式，Scheme C/D）**：
-每个音符用**一个 token** 表示——位置和内容合并编码：
+**Bundled (Schemes C/D).** Each note is represented by **one token**, with position and
+content encoded jointly:
 ```
 bundled = position × 81 + patch_value  → 1 token/note
-词汇表: 88 × 81 + 特殊token = 7146
+vocabulary: 88 × 81 + special tokens = 7145
 ```
 
-**核心权衡**：
+**The core trade-off:**
 
-| 指标 | Unbundled (A/B) | Bundled (C/D) |
-|------|-----------------|---------------|
-| 词汇量 | ~186 (小) | ~7146 (大) |
-| 序列长度 | 2×音符数 (长) | 1×音符数 (短) |
-| Token 预测难度 | 低 (186-class) | 高 (7146-class) |
-| 上下文窗口利用 | 较差 (序列长) | 较好 (序列短) |
-| Embedding 参数量 | 95 KB | 3.6 MB |
+| Criterion | Separated (A/B) | Bundled (C/D) |
+|-----------|-----------------|---------------|
+| Vocabulary size | ~186 (small) | ~7145 (large) |
+| Sequence length | 2 × #notes (long) | 1 × #notes (short) |
+| Token-prediction difficulty | Low (186-way) | High (7145-way) |
+| Use of the context window | Worse (long sequences) | Better (short sequences) |
+| Embedding parameters | ~95 K | ~3.7 M |
 
-**实验假设**：Bundled 的序列更短，Transformer 能看到更大的音乐上下文范围；但词汇表从 186 爆炸到 7146，Token Head 的分类难度增大约 38 倍。
+**Hypothesis**: bundled sequences are shorter, so the Transformer sees a larger musical
+context; but the vocabulary explodes from 186 to 7145, making the token-prediction
+policy roughly 38× harder as a classification problem.
 
-### 3.5 具体编码示例
+### 3.5 A concrete encoding example
 
-假设某 beat 有 3 个音符在 pitch [10, 35, 60]，patch 值为 [5, 23, 41]：
+Suppose some beat has 3 notes at pitches [10, 35, 60] with patch values [5, 23, 41]:
 
-| 方案 | 编码 | Token 数 |
-|------|------|---------|
-| A (rel/unbundled) | `[91, 5, 106, 23, 106, 41, END]` | 7 |
-| B (abs/unbundled) | `[TRACK0, 91, 5, 116, 23, 141, 41]` | 7 |
+| Scheme | Encoding | #Tokens |
+|--------|----------|---------|
+| A (abs/separated) | `[TRACK0, 91, 5, 116, 23, 141, 41]` | 7 |
+| B (rel/separated) | `[91, 5, 106, 23, 106, 41, END]` | 7 |
 | C (rel/bundled) | `[SPLIT_0, 815, 2048, 2066]` | 4 |
 | D (abs/bundled) | `[SPLIT_0, 815, 2858, 4901]` | 4 |
 
-Bundled 编码节省约 **43%** 的 token 数。
+Bundling saves about **43%** of the tokens in this example. Measured over the corpus, the
+bundled schemes average 1,163 tokens per sequence against 1,891–1,907 for the separated
+schemes (≈39% shorter).
 
-### 3.6 双轨表示
+### 3.6 Dual-track representation
 
-输入为双轨钢琴卷（旋律 Track 0 + 伴奏 Track 1）。每个 beat 内两个声部交替出现：
+The input is a dual-track piano roll (melody = Track 0, accompaniment = Track 1). Within
+each beat the two voices alternate:
 
 ```
 [BAR] [SPLIT_0] melody_notes... [SPLIT_1] accomp_notes... [BAR] ...
 ```
 
-SPLIT_0/SPLIT_1（或 TRACK0_START/TRACK1_START）标记声部切换，使模型能区分旋律与伴奏进行独立建模。
+`SPLIT_0` / `SPLIT_1` (or `TRACK0_START` / `TRACK1_START`) mark the voice switch, so the
+model can tell melody from accompaniment and model them separately. Because the
+interleaving is at beat level and positional, separating the accompaniment out of the
+sequence is a matter of positional indexing.
 
 ---
 
-## 4. 模型架构：三头共享编码器
+## 4. Architecture: Three Policy Heads on a Shared Encoder
 
-### 4.1 为什么用 Encoder-only 而非 Encoder-Decoder
+### 4.1 Why encoder-only rather than encoder–decoder?
 
-原始 LevT (Gu et al., 2019) 采用 Encoder-Decoder 架构，因为翻译任务中源语言和目标语言是不同的序列。但音乐修复的本质是**在同一个序列上做局部编辑**——上下文和待修复区域共享同一个 token 空间、同一套注意力机制。
+The original LevT (Gu et al., 2019) uses an encoder–decoder architecture, because in
+translation the source and target are different sequences. But music editing is
+fundamentally **local editing within a single sequence** — the context and the region
+being repaired share one token space and one attention mechanism.
 
-Encoder-only 的优势：
-1. **与 BERT 预训练一致**：直接复用 Music BERT 的编码器权重，无需设计 cross-attention 初始化
-2. **全局注意力**：每个位置可同时看到左右上下文，天然适合修复场景
-3. **参数高效**：相比 Encoder-Decoder 减少约 40% 参数量（无 Decoder + cross-attention）
-4. **简洁性**：三头直接从共享 hidden states 分支，不需要 Decoder 的自回归掩码
+Advantages of encoder-only:
+1. **Consistent with BERT pre-training**: the Music BERT encoder weights can be reused directly, with no cross-attention to initialize.
+2. **Global attention**: every position sees the left and the right context at once, which is exactly what editing needs.
+3. **Parameter-efficient**: roughly half the parameters of an encoder–decoder of the same width (33.9 M vs. 66.5 M), since there is no decoder and no cross-attention.
+4. **Simplicity**: the three heads branch straight off the shared hidden states; there is no autoregressive decoder mask.
 
-### 4.2 架构细节
+This is not merely a convenience. The paper's ablation (Appendix) replaces the
+encoder-only backbone with an encoder–decoder cross-attention design and performance
+**collapses** (editing beat exact match .051, correction .034, FMD > 18). The encoder-only
+inductive bias — edited tokens and context tokens sharing one attention — is a
+load-bearing part of the editing paradigm, not an optimization.
+
+### 4.2 Architecture details
 
 ```
-Input → Token Embedding → Sinusoidal PE → TransformerEncoder (8L, 512H, 8Attn, 2048FFN)
+Input → BERT embeddings (token + learned position) → BertModel encoder (8L, 512H, 8 heads, 2048 FFN)
                                                 ↙          ↓          ↘
                                            Del Head    Ins Head    Tok Head
                                            (B,L,2)   (B,L+1,21)  (B,L,V)
 ```
 
-| 组件 | 规格 | 设计理由 |
-|------|------|---------|
-| Hidden dim | 512 | 与 Music BERT 对齐，便于权重迁移 |
-| Layers | 8 | 参数量 ~32.8M，在 2×4090 上可训练 |
-| Attention heads | 8 | 每头 64 维，多头覆盖不同范围的音乐依赖 |
-| FFN dim | 2048 | 4× hidden，标准 Transformer 配置 |
-| Activation | GELU | 比 ReLU 更平滑，BERT 标准选择 |
-| Norm | Pre-LayerNorm | 训练更稳定 |
-| PE | Sinusoidal | 支持变长序列，不需要学习 |
+The backbone is a HuggingFace `BertModel` (`add_pooling_layer=False`), configured to
+match the Music BERT pre-training exactly so that the pre-trained weights load directly
+(`src/iteredit/models/levenshtein_transformer.py`).
 
-### 4.3 三个预测头的设计
+| Component | Setting | Rationale |
+|-----------|---------|-----------|
+| Hidden dim | 512 | Matches Music BERT, so weights transfer |
+| Layers | 8 | ~33.9 M parameters total |
+| Attention heads | 8 | 64 dims per head; different heads cover musical dependencies at different ranges |
+| FFN dim | 2048 | 4× hidden, the standard Transformer ratio |
+| Activation | GELU | Smoother than ReLU; the BERT default |
+| Norm | Post-LayerNorm (BERT default) | Inherited from the pre-trained backbone |
+| Position encoding | Learned absolute embeddings, `max_position_embeddings = 2048` | Inherited from the pre-trained backbone |
+| Dropout | 0.1 | Hidden and attention dropout |
 
-**Deletion Head — "哪些 token 是错的？"**
+### 4.3 The three policy heads
+
+**Deletion — "which tokens are wrong?"**
 ```
 LayerNorm(512) → Dropout → Linear(512, 2)
 ```
-- 每个 token 二分类：KEEP(0) / DELETE(1)
-- 设计最简——删除是最简单的判断，不需要复杂结构
+- Binary classification per token: KEEP (0) / DELETE (1).
+- Deliberately the simplest head — deciding whether to delete is the easiest of the three judgements and does not need extra capacity.
 
-**Insertion Head — "每个间隙该插入多少占位符？"**
+**Placeholder insertion — "how many placeholders belong in each gap?"**
 ```
 [h_{i-1}; h_i] → LayerNorm(1024) → Dropout → Linear(1024, 21)
 ```
-- **关键设计**：对相邻 hidden states 做拼接（concatenation），构造 "间隙表示"
-- 长度为 L 的序列有 L+1 个间隙（含首尾），输出 `(B, L+1, 21)`
-- 预测范围 0~20：每个间隙最多插入 20 个 PLH
+- **Key design point**: adjacent hidden states are concatenated to build a "gap representation".
+- A sequence of length L has L+1 gaps (including the two ends), so the output is `(B, L+1, 21)`.
+- The prediction range is 0–20: at most 20 placeholders per gap (`max_insert = 20`).
 
-**为什么拼接相邻表示？** 间隙的"应该插入多少"取决于两侧内容的不连续程度。相邻 token 的 hidden state 拼接直接编码了这种局部不连续信息，比仅用单侧或全局池化更精准。
+**Why concatenate adjacent representations?** How many tokens belong in a gap depends on
+how discontinuous the two sides are. Concatenating the hidden states of the neighbouring
+tokens encodes that local discontinuity directly, which is sharper than using one side
+alone or a global pooled vector.
 
-**Token Head — "占位符应该填什么？"**
+**Token prediction — "what should each placeholder become?"**
 ```
 Linear(512, 512) → GELU → LayerNorm → Linear(512, V)
 ```
-- 在含 PLH 的序列上运行，为每个位置（特别是 PLH 位置）预测目标 token
-- 使用两层 MLP（而非单层 Linear），因为 token 预测是三个子任务中最难的
+- Runs on the sequence *after* placeholders have been inserted, predicting a target token for every position (the placeholder positions in particular).
+- Uses a two-layer MLP rather than a single linear layer, because token prediction is the hardest of the three sub-tasks.
 
-### 4.4 两次前向传播
+All three heads are initialized with Xavier-uniform weights and zero biases; the encoder
+is initialized from Music BERT.
 
-训练时 `compute_loss` 需要两次独立的 encoder forward：
+### 4.4 The two forward passes
 
-| Forward | 输入序列 | 输出 | 为什么 |
-|---------|---------|------|--------|
-| Pass 1 | $z$（中间状态） | del_logits + ins_logits | 在"当前状态"上判断删改 |
-| Pass 2 | $z_{tok}$（$z$ + 插入 PLH 后） | tok_logits | 在"插入 PLH 后的状态"上预测填充 |
+Training (`compute_loss`) requires two independent encoder forward passes:
 
-这两次 forward **不可合并**，因为 $z_{tok}$ 比 $z$ 更长（插入了额外的 PLH token），是一个完全不同的序列。这是 Levenshtein 框架的固有开销，但换来的是长度自适应的能力。
+| Forward | Input sequence | Output | Why |
+|---------|----------------|--------|-----|
+| Pass 1 | $z$ (the intermediate state) | del_logits + ins_logits | Decide what to delete and where to insert, on the *current* state |
+| Pass 2 | $z_{tok}$ ($z$ after placeholders are inserted) | tok_logits | Predict the fill on the state that *already contains* the placeholders |
 
-### 4.5 Music BERT 预训练初始化
+The two passes **cannot be merged**, because $z_{tok}$ is longer than $z$ (extra `[PLH]`
+tokens have been inserted) and is therefore a different sequence. This is an inherent
+cost of the Levenshtein framework, and it buys the length adaptivity.
 
-我们为四种编码方案各自预训练了 Music BERT（MLM 目标），然后将 embedding 层和 encoder 层的权重迁移到 LevT 的对应模块。三个预测头随机初始化（Xavier uniform）。
+### 4.5 Music BERT pre-trained initialization
 
-**迁移策略的合理性**：
-- BERT 已学会了音乐 token 之间的局部依赖关系（和弦结构、节奏模式等）
-- LevT 的 encoder 与 BERT 架构完全一致（同一个 TransformerEncoder），权重可直接复用
-- 三个头是全新任务，随机初始化不影响收敛（从实验看，头的 loss 在前 3 个 epoch 快速下降）
+We pre-train a Music BERT (MLM objective) for each of the four encoding schemes, then
+transfer the embedding layer and the encoder layers into the corresponding modules of
+IterEdit. The three heads are initialized randomly (Xavier uniform).
+
+**Why the transfer works:**
+- BERT has already learned the local dependencies between music tokens (chord structure, rhythmic patterns, and so on).
+- IterEdit's encoder is architecturally identical to the BERT encoder, so the weights load directly.
+- The three heads are new tasks; random initialization does not hurt convergence (empirically their losses drop quickly within the first ~3 epochs).
+
+The value of this initialization is large: in the paper's pre-training ablation, removing
+BERT pre-training and training from scratch degrades performance catastrophically
+(SeqTag correction beat 0.700 → 0.195).
 
 ---
 
-## 5. 训练策略
+## 5. Training
 
-### 5.1 带约束的 Levenshtein DP（核心创新）
+### 5.1 Constrained Levenshtein DP (core design point)
 
-标准 Levenshtein 距离计算的是将序列 A 变为序列 B 所需的最少编辑操作数。**我们的关键修改**：只在掩码区域 $[m_s, m_e)$ 内计算 DP，上下文区域的标签被强制设为"不操作"。
+The standard Levenshtein distance is the minimum number of edits that turn sequence A
+into sequence B. **Our key modification**: the DP is run only inside the masked region
+$[m_s, m_e)$, and the labels for the context region are forced to "no operation".
 
 ```
-完整序列:  [context_left | mask_region | context_right]
-DP 范围:                  |←── 仅此区域 ──→|
-context 标签:  del=0, ins=0（冻结）
+full sequence:  [context_left | mask_region | context_right]
+DP range:                      |←── this region only ──→|
+context labels:  del = 0, ins = 0 (frozen)
 ```
 
-具体流程：
-1. 提取中间状态 $z$ 的掩码区域 $z[m_s:m_e]$，以及目标序列 $y$ 的对应区域
-2. 仅在这两个子序列之间做标准 Levenshtein DP
-3. 回溯 DP 路径，提取三类标签：
-   - `del_labels[i]` ∈ {0, 1}：是否删除
-   - `ins_labels[i]` ∈ [0, 20]：间隙 $i$ 处插入 PLH 数
-   - `tok_labels`：PLH 位置对应的目标 token
-4. 上下文位置的标签设为 ignore_index=-100（不参与 loss 计算）
+The procedure:
+1. Extract the masked region $z[m_s:m_e]$ of the intermediate state $z$, and the corresponding region of the target sequence $y$.
+2. Run a standard Levenshtein DP between those two sub-sequences only.
+3. Backtrace the DP path and read off three sets of labels:
+   - `del_labels[i]` ∈ {0, 1}: delete or not;
+   - `ins_labels[i]` ∈ [0, 20]: how many placeholders go in gap $i$;
+   - `tok_labels`: the target token for each placeholder position.
+4. Context positions get `ignore_index = -100` (they contribute no loss).
 
-**为什么不在全序列上做 DP？** 如果允许 DP 在上下文区域操作，它可能会"发现"通过修改上下文来减少总编辑距离的路径，这违反了修复任务"上下文不可变"的约束。受约束 DP 保证了训练标签与推理行为的一致性。
+**Why not run the DP over the whole sequence?** If the DP were allowed to operate on the
+context, it could "discover" paths that reduce the total edit distance by modifying the
+context — which violates the task constraint that the context is immutable. The
+constrained DP keeps the training labels consistent with the behaviour at inference.
 
-### 5.2 中间状态采样（训练数据增强）
+**Implementation note.** `src/iteredit/data/levenshtein_utils.py` is a numpy
+re-implementation of the alignment routines, ported from fairseq's
+`fairseq/models/nat/levenshtein_utils.py`. It is a rewrite, not a wrapper: **fairseq is
+not a runtime dependency** of this repository.
 
-在实际推理中，模型看到的输入是"修复进行到一半"的中间状态——有些 token 已正确、有些还有错误。训练时需要模拟这种中间状态来生成训练对。
+### 5.2 Intermediate-state sampling (the roll-in policy)
 
-我们的采样策略对掩码区域的每个 token 独立执行：
-- **30% 概率删除**：模拟之前迭代中多余的 token
-- **20% 概率替换**为随机 token：模拟之前迭代中预测错误的 token
-- **50% 概率保留**正确 token：提供部分正确信息作为锚点
+At inference the model sees inputs that are "halfway through being repaired" — some
+tokens are already correct and some are still wrong. Training must simulate such
+intermediate states in order to produce training pairs.
 
-**设计考量**：
-- 50% 保留率确保模型能利用已有的正确 token（而非从零开始）
-- 30% 删除率模拟"序列中有冗余 token 需要清理"的场景
-- 20% 替换率模拟"有错误 token 需要先删除再重新生成"的场景
-- 这三种破坏覆盖了实际迭代修复中可能出现的所有中间状态类型
+Our sampling policy is applied independently to every token of the masked region:
+- **delete with probability 0.30**: simulates a leftover token from an earlier iteration;
+- **replace with a random token with probability 0.20**: simulates a token an earlier iteration predicted wrongly;
+- **keep the correct token with probability 0.50**: provides partially-correct information as an anchor.
 
-### 5.3 Beat-boundary Masking（音乐先验）
+**Rationale:**
+- The 0.50 keep rate ensures the model learns to exploit the correct tokens it already has, rather than starting from nothing.
+- The 0.30 delete rate simulates "there is redundant material in the sequence that must be cleaned up".
+- The 0.20 replace rate simulates "there is a wrong token that must first be deleted and then regenerated".
+- Together these three corruptions cover the kinds of intermediate state that actually arise during iterative refinement.
 
-创建训练对时的掩盖策略：
+**This is deliberately not the original LevT roll-in.** The original Levenshtein
+Transformer trains its policies with dual-policy imitation learning (roll-in from a
+mixture of the model's own predictions and an expert/oracle policy). IterEdit instead
+constructs the roll-in states by direct random corruption of the target's mask region, as
+described above. The corruption probabilities are the
+`corruption_delete_prob` / `corruption_replace_prob` fields in
+`src/iteredit/configs/config.py`.
 
-1. 将完整序列按 **beat 边界** 解析为结构化的 beat 列表
-2. 随机选择**连续的若干 beat** 作为掩码区域（12.5%~50% 的 beat 数量）
-3. 至少保留首尾各 1 个 beat 作为上下文
+### 5.3 Multi-level perturbation (the editing task)
 
-**为什么按 beat 边界而非随机 token 位置？**
+Contiguous masking alone teaches the model to fill a gap; it does not teach it to make
+scattered, fine-grained edits. For the accompaniment-editing task, the training data is
+therefore built by perturbing the **accompaniment track only** (the melody is left intact
+as context) at one of four difficulty levels, sampled with weights
+**L1 : L2 : L3 : L4 = 30 : 30 : 25 : 15** — from light single-note edits (L1) up to
+near-complete rewriting of the accompaniment (L4). See
+`src/iteredit/data/dataset_editing.py` and `perturb_accompaniment()`.
 
-音乐具有层级结构：音符 → beat → 小节 → 乐段。随机遮盖 token 可能在一个 beat 中间截断，产生不自然的边界（如一个和弦被切成一半）。按 beat 边界掩盖确保：
-- 上下文的 beat 结构完整，为模型提供干净的音乐先验
-- 目标区域的 beat 结构完整，训练标签语义明确
-- 与实际应用场景对齐（用户通常按小节或乐句单位指定修复区域）
+This matters a great deal: the paper's ablation shows a roughly 4× gap on editing beat
+exact match between the multi-level-perturbation model (.480) and the vanilla
+contiguous-masking configuration (.114).
 
-### 5.4 损失函数
+### 5.4 Beat-boundary masking (the musical prior)
+
+The masking strategy used when building inpainting/completion pairs:
+
+1. Parse the full sequence into a structured list of beats along **beat boundaries**.
+2. Choose a random run of **consecutive beats** as the masked region (12.5%–50% of the beats).
+3. Keep at least one beat of context at each end.
+
+**Why beat boundaries rather than random token positions?**
+
+Music is hierarchical: notes → beats → bars → phrases. Masking random tokens can cut a
+beat in half and produce unnatural boundaries (for instance, half of a chord). Masking on
+beat boundaries guarantees that:
+- the context has an intact beat structure, giving the model a clean musical prior;
+- the target region has an intact beat structure, so the training labels are semantically well-defined;
+- the setup matches the real use case (users specify a region to repair in bars or phrases).
+
+### 5.5 Loss function
 
 $$\mathcal{L} = \mathcal{L}_{del} + \mathcal{L}_{ins} + \mathcal{L}_{tok}$$
 
-| 损失项 | 公式 | 说明 |
-|--------|------|------|
-| $\mathcal{L}_{del}$ | `CE(del_logits, del_labels, ignore=-100)` | 二分类 CE，上下文位置忽略 |
-| $\mathcal{L}_{ins}$ | `CE(ins_logits, ins_labels, ignore=-100)` | 21 分类 CE，仅掩码区间隙参与 |
-| $\mathcal{L}_{tok}$ | `CE(tok_logits[PLH], tok_targets, ε=0.1)` | 仅 PLH 位置，label smoothing 缓解过拟合 |
+| Term | Formula | Notes |
+|------|---------|-------|
+| $\mathcal{L}_{del}$ | `CE(del_logits, del_labels, ignore=-100)` | Binary CE; context positions ignored |
+| $\mathcal{L}_{ins}$ | `CE(ins_logits, ins_labels, ignore=-100)` | 21-way CE; only gaps in the masked region contribute |
+| $\mathcal{L}_{tok}$ | `CE(tok_logits[PLH], tok_targets, ε=0.1)` | Placeholder positions only; label smoothing encourages diversity |
 
-三项等权重（$w_{del}=w_{ins}=w_{tok}=1.0$）。从实验数据看：
-- Del/Ins loss 在前 5 个 epoch 快速降至极低值（< 0.1），说明删除/插入是相对简单的子任务
-- Tok loss 占最终 total loss 的 **95%+**，说明 token 预测是真正的难点
-- 未来可考虑动态权重调整，将更多梯度分配给 tok head
+The three terms are equally weighted ($w_{del} = w_{ins} = w_{tok} = 1.0$). Empirically:
+- the deletion and insertion losses fall to very small values (< 0.1) within the first few epochs, confirming that these are the easier sub-tasks;
+- the token loss accounts for **95%+** of the final total loss — token prediction is the real difficulty;
+- dynamic loss weighting, to send more gradient to the token head, remains an open direction.
+
+### 5.6 Training hyperparameters
+
+| Setting | Value |
+|---------|-------|
+| Optimizer | AdamW, weight decay 0.01 |
+| Learning rate | 3 × 10⁻⁴, cosine schedule with 10% warmup |
+| Batch size | **64 effective** (32 per step × 2 gradient-accumulation steps) |
+| Epochs | 30 |
+| Mixed precision | fp16 |
+| Gradient clipping | 1.0 |
+| Label smoothing | 0.1 (token head) |
+| Max sequence length | 2048 |
+| Mask ratio (beats) | 0.125 – 0.50 |
+
+See `src/iteredit/configs/config.py` and `scripts/04_train_iteredit.sh`.
 
 ---
 
-## 6. 迭代推理：可编辑标志机制
+## 6. Iterative Inference: the Editable-Flag Mechanism
 
-### 6.1 三阶段循环
+### 6.1 The three-stage loop
 
 ```python
-初始状态: [上文(frozen)] + [PLH] + [下文(frozen)]
+initial state: [context(frozen)] + [PLH] + [context(frozen)]
 
 for step in 1..max_iter:
-    ① Delete: 对 editable 区域的 token，概率 > 0.5 则删除
-    ② Insert: 对 editable 间隙，预测插入 PLH 数量
-    ③ Fill:   对所有 PLH 位置，预测目标 token
+    ① Delete: for tokens in the editable region, delete if p > 0.5
+    ② Insert: for editable gaps, predict how many PLH to insert
+    ③ Fill:   for every PLH position, predict the target token
 
-    if 无删除 + 无插入 + 无填充 → 收敛，停止
+    if no deletion + no insertion + no fill → converged, stop
 ```
 
-### 6.2 Per-token Editable Flags（核心创新）
+### 6.2 Per-token editable flags (core design point)
 
-这是我们对原始 LevT 推理流程的重要改进。原始 LevT 用 index-based 的 mask_start/mask_end 追踪可编辑区域边界，但这种方式在迭代修复中极其脆弱：
+This is our main change to the original LevT inference procedure. The original tracks the
+editable region with index-based `mask_start` / `mask_end` boundaries, which is extremely
+fragile under iterative editing:
 
-**问题**：每次删除或插入都会改变序列长度，导致索引移位。例如：
-- 在 position 5 删除 3 个 token 后，原来 mask_end=20 应该变成 17
-- 在 position 10 插入 5 个 PLH 后，mask_end 又要变成 22
-- 多次操作叠加，索引追踪极易出错
+**The problem**: every deletion or insertion changes the sequence length and shifts the
+indices. For example:
+- after deleting 3 tokens at position 5, a `mask_end` of 20 must become 17;
+- after inserting 5 placeholders at position 10, `mask_end` must become 22;
+- once several operations compose, index tracking is very easy to get wrong.
 
-**我们的方案**：为每个 token 维护布尔标志 `editable[i]`：
-- `True`：可编辑（属于掩码区域或新插入的 token）
-- `False`：冻结（属于上下文区域，不可删除/修改）
+**Our solution**: maintain a boolean flag `editable[i]` for every token:
+- `True`: editable (belongs to the masked region, or is a newly inserted token);
+- `False`: frozen (belongs to the context; cannot be deleted or modified).
 
-**规则定义**：
-| 操作 | editable 更新规则 |
-|------|------------------|
-| 删除 token $i$ | 移除 `editable[i]`，剩余标志不变 |
-| 在间隙 $i$ 插入 PLH | 新 PLH 的 `editable = True` |
-| 填充 PLH → real token | 保持 `editable = True`（仍可在后续迭代中被删除） |
-| 上下文 token | 始终 `editable = False`，不可删除 |
+**The rules:**
 
-**间隙可插入性判断**：
+| Operation | How `editable` is updated |
+|-----------|---------------------------|
+| Delete token $i$ | Remove `editable[i]`; the remaining flags are unchanged |
+| Insert a PLH into gap $i$ | The new PLH gets `editable = True` |
+| Fill a PLH with a real token | Keep `editable = True` (it can still be deleted in a later iteration) |
+| Context token | Always `editable = False`; never deleted |
+
+**Deciding whether a gap can take an insertion:**
 ```
-gap[i] 可插入 ⟺ editable[i-1] = True 或 editable[i] = True
+gap[i] is insertable ⟺ editable[i-1] = True or editable[i] = True
 ```
-即：只有在可编辑区域的边界处或内部才允许插入。这防止了模型在上下文中间"凭空"插入 token。
+That is: insertion is allowed only at the boundary of, or inside, the editable region.
+This prevents the model from conjuring tokens into the middle of the context.
 
-**为什么这个设计更优？**
-1. **与序列长度变化解耦**：标志跟着 token 走，增删操作自然保持一致
-2. **支持非连续可编辑区域**：理论上可处理多个分离的掩码区域
-3. **实现简洁**：Python list 的增删操作天然维护 editable flags 的对应关系
+**Why this is the better design:**
+1. **Decoupled from length changes**: the flag travels with its token, so insertions and deletions stay consistent automatically.
+2. **Supports non-contiguous editable regions**: in principle several disjoint masked regions can be handled — which is exactly what the accompaniment-editing task needs, since the perturbed beats are scattered.
+3. **Simple to implement**: Python list insertion/removal maintains the correspondence between tokens and flags for free.
 
-### 6.3 首次迭代的 Insertion Seed
+This mechanism is also what enforces **hard melody preservation** in the editing task:
+all melody tokens and structural markers are given $E_i = 0$, and the model is
+constrained never to touch those positions — at training time (the frozen tokens are
+identical in the intermediate state and the target, so the DP naturally emits `del = 0`,
+`ins = 0` for them) and at inference time (the deletion head only operates where
+$E_i = 1$).
 
-特殊情况：首次迭代时掩码区域可能只有 1 个 PLH，此时 `editable = [False, ..., True, ..., False]`。为确保第一次能插入足够多的 PLH，在掩码起始位置设置 `insertion_seed`——即使该间隙两侧有冻结 token，也允许插入。
+### 6.3 The insertion seed on the first iteration
 
-这是一个工程细节但对正确性至关重要：没有 insertion seed，模型第一轮只能在 1 个 PLH 处操作，无法扩展到目标长度。
+A special case: on the first iteration the masked region may contain only a single
+placeholder, so `editable = [False, ..., True, ..., False]`. To make sure enough
+placeholders can be inserted on the very first round, an `insertion_seed` is placed at the
+mask-start position — that gap is allowed to take insertions even though the tokens on
+both sides of it are frozen.
 
-### 6.4 收敛与终止
+This is an engineering detail, but it is essential for correctness: without the insertion
+seed, the first round could only operate at the single existing placeholder and could
+never grow to the target length.
 
-收敛条件简洁而有效：
-- 删除 0 个 token **且** 插入 0 个 PLH **且** 填充 0 个 PLH → 停止
-- 或达到 max_iter（默认 10 轮）
+### 6.4 Convergence and termination
 
-从迭代修复的语义来看，"无任何操作"意味着模型认为当前序列已经是最优状态。实际实验中，大多数样本在 3~5 轮内收敛。
+The convergence test is simple and effective:
+- zero tokens deleted **and** zero placeholders inserted **and** zero placeholders filled → stop;
+- or `max_iter` is reached.
+
+In the released configuration `max_iter = 10` for the completion task (also the default
+in `configs/config.py` and `evaluation/evaluate.py`), and **3 iterations** for the editing
+task, where the input is already a plausible draft rather than an empty gap. The deletion
+threshold is 0.5.
+
+Semantically, "no operation at all" means the model considers the current sequence
+optimal. In practice most completion samples converge within 3–5 rounds.
 
 ---
 
-## 7. 设计决策分析
+## 7. Design-Decision Analysis
 
-### 7.1 为什么非自回归（NAR）优于自回归（AR）？
+### 7.1 Why non-autoregressive (NAR) rather than autoregressive (AR)?
 
-| 维度 | AR | NAR (LevT) |
-|------|-----|-----------|
-| 上下文利用 | 仅左侧 | 双向全局 |
-| 生成长度 | 需预先确定或用 EOS 终止 | 由 Ins Head 动态推断 |
-| 推理复杂度 | $O(n)$ 序列解码 | $O(k)$ 迭代（$k$ ≪ $n$） |
-| 误差累积 | 严重（每步依赖前一步） | 迭代纠错减轻 |
-| 多样性 | 需要 beam search 或采样 | 天然支持温度/top-k |
+| Dimension | AR | NAR (LevT / IterEdit) |
+|-----------|-----|----------------------|
+| Context | Left only | Bidirectional, global |
+| Output length | Must be fixed in advance, or ended with EOS | Inferred dynamically by the insertion head |
+| Inference cost | $O(n)$ sequential decoding | $O(k)$ iterations ($k \ll n$) |
+| Error accumulation | Severe (each step depends on the last) | Mitigated by iterative correction |
+| Diversity | Needs beam search or sampling | Temperature / top-k supported naturally |
 
-### 7.2 Encoder-only vs Encoder-Decoder
+### 7.2 Encoder-only vs. encoder–decoder
 
-原始 LevT 论文使用 Encoder-Decoder，因为翻译中 source ≠ target。但音乐修复中：
-- Source（含掩码的序列）和 target（完整序列）共享同一 token 空间
-- 上下文 token 在 source 和 target 中完全相同
-- 不需要 cross-attention 来"翻译"
+The original LevT paper uses an encoder–decoder because in translation source ≠ target.
+In music editing, however:
+- the source (the sequence with the masked/perturbed region) and the target (the complete sequence) share one token space;
+- the context tokens are literally identical in source and target;
+- there is nothing to "translate", so cross-attention has no job to do.
 
-因此 Encoder-only 更自然、更高效。若实验证明容量不足，可回退到 Encoder-Decoder（ENHANCEMENT E4）。
+Encoder-only is therefore both more natural and more efficient. This was originally noted
+as a hypothesis with encoder–decoder held in reserve as a fallback if capacity turned out
+to be insufficient. **The fallback is closed**: the measured encoder–decoder variant
+(66.5 M parameters vs. 33.9 M) does not merely fail to help, it collapses — editing beat
+exact match .051 and correction .034, with FMD above 18.
 
-### 7.3 训练-推理一致性考量
+### 7.3 Training–inference consistency
 
-| 环节 | 训练 | 推理 | 一致性 |
-|------|------|------|-------|
-| 上下文保护 | 软约束（loss mask, ignore=-100） | 硬约束（editable flags 冻结） | 存在 gap |
-| 中间状态来源 | 随机采样（30/20/50） | 模型自身前一轮输出 | 存在 gap |
-| 操作序列 | DP 最优路径 | 模型贪心预测 | 基本一致 |
+| Aspect | Training | Inference | Consistent? |
+|--------|----------|-----------|-------------|
+| Context / melody protection | Frozen tokens are identical in the intermediate state and the target, so the DP emits `del=0, ins=0`; context labels are additionally masked out of the loss (`ignore = -100`) | Hard constraint: `editable` flags freeze the tokens | Yes for the editing task; for the contiguous-masking mode the training-side constraint is a loss mask rather than a hard freeze |
+| Source of the intermediate state | Random corruption (0.3 / 0.2 / 0.5) plus multi-level perturbation | The model's own output from the previous round | Gap remains |
+| Edit sequence | The DP-optimal path | The model's greedy prediction | Broadly consistent |
 
-**承认的局限**：训练时的软约束（通过 loss mask 忽略上下文梯度）与推理时的硬约束（直接冻结 token）之间存在不匹配。这是未来优化方向之一（ENHANCEMENT E5：训练时也施加硬约束）。
+**Acknowledged limitation**: for the contiguous-masking (completion) configuration, the
+soft constraint used at training (ignoring the context gradient through a loss mask) does
+not exactly match the hard constraint used at inference (freezing the tokens outright).
+Intermediate-state sampling narrows, but does not close, the exposure-bias gap between
+random roll-in states and the model's own multi-round outputs; a DAgger-style roll-in
+remains an open direction.
 
-### 7.4 四方案对比的实验设计合理性
+### 7.4 Why the four-scheme comparison is a sound experimental design
 
-2×2 正交实验设计使我们能**独立评估**两个设计维度的影响：
-- 固定 token 风格，比较 A vs B（relative vs absolute，unbundled）
-- 固定 token 风格，比较 C vs D（relative vs absolute，bundled）
-- 固定位置编码，比较 A vs C（unbundled vs bundled，relative）
-- 固定位置编码，比较 B vs D（unbundled vs bundled，absolute）
+The 2×2 factorial design lets us assess the two axes **independently**:
+- fix the token organization and compare A vs. B (absolute vs. relative, separated);
+- fix the token organization and compare D vs. C (absolute vs. relative, bundled);
+- fix the position encoding and compare A vs. D (separated vs. bundled, absolute);
+- fix the position encoding and compare B vs. C (separated vs. bundled, relative).
 
-四种方案共享完全相同的模型架构、训练超参数、数据集和评估流程，唯一变量是编码方案。这确保了对比的公平性。
-
----
-
-## 8. 与现有工作的关系
-
-### 8.1 与原始 LevT (Gu et al., 2019) 的区别
-
-| 维度 | 原始 LevT | 本工作 |
-|------|----------|--------|
-| 任务 | 机器翻译 | 音乐修复（条件生成） |
-| 架构 | Encoder-Decoder | Encoder-only |
-| 编辑范围 | 全序列可编辑 | 受约束（仅掩码区域可编辑） |
-| 边界追踪 | 无（全序列可编辑） | Per-token editable flags |
-| 预训练 | 无 | Music BERT 初始化 |
-| 输入表示 | BPE subword | 音乐领域定制编码（4 种方案） |
-
-### 8.2 与 Mask-Predict (Ghazvininejad et al., 2019) 的区别
-
-Mask-Predict 也是 NAR 迭代式生成，但：
-- 假设目标长度已知（从 source 长度预测），**不支持可变长度**
-- 每轮只替换低置信 token，**不支持删除和插入**
-- 本工作的 delete→insert→fill 三步法更灵活
-
-### 8.3 在音乐 AI 领域的定位
-
-| 方法 | 生成方式 | 长度处理 | 上下文利用 |
-|------|---------|---------|-----------|
-| Music Transformer (Huang et al.) | AR | 固定或 EOS | 仅左侧 |
-| MuseNet (OpenAI) | AR | 固定 | 仅左侧 |
-| MusicBERT + Mask-Predict | NAR | 固定 | 双向 |
-| **LevT Music Inpainting (Ours)** | **NAR 迭代** | **自适应** | **双向** |
-
-本工作的独特之处在于：**首次在符号音乐领域实现长度自适应的双向修复**。
+All four schemes share exactly the same model architecture, training hyperparameters,
+dataset, and evaluation pipeline; the encoding is the only variable. That is what makes
+the comparison fair — and it is what allows the encoding × method interaction effect to
+be measured.
 
 ---
 
-## 9. 声部协调编辑 (Track-coordinated Editing)
+## 8. Relation to Prior Work
 
-### 9.1 动机：声部关系的显式建模
+### 8.1 Differences from the original LevT (Gu et al., 2019)
 
-双轨音乐的 token 混在同一序列中，Transformer 的 self-attention 对所有 token 一视同仁。但音乐中存在两种本质不同的依赖关系：
+| Dimension | Original LevT | This work |
+|-----------|---------------|-----------|
+| Task | Machine translation | Symbolic music editing (conditional generation) |
+| Architecture | Encoder–decoder | Encoder-only |
+| Edit scope | The whole sequence is editable | Constrained: only the masked / perturbed region is editable |
+| Boundary tracking | None (everything is editable) | Per-token editable flags |
+| Roll-in policy | Dual-policy imitation learning | Intermediate-state sampling by random corruption (§5.2) + multi-level perturbation (§5.3) |
+| Pre-training | None | Music BERT initialization |
+| Input representation | BPE subwords | Music-specific encodings (four schemes) |
 
-- **同声部内依赖**：旋律线条的流畅连贯、伴奏型的一致延续
-- **跨声部间依赖**：和声兼容（不出现不协调音程）、节奏互补（旋律密时伴奏疏）
+### 8.2 Differences from Mask-Predict (Ghazvininejad et al., 2019)
 
-标准 Transformer 必须从数据中隐式学习这两种关系的区别。但音乐编码本身已包含声部信息（SPLIT_0/SPLIT_1 标记），我们可以将这种结构先验显式注入 attention 机制。
+Mask-Predict is also an iterative NAR method, but:
+- it assumes the target length is known (predicted from the source length), so it **cannot handle variable length**;
+- each round only replaces low-confidence tokens; it **cannot delete or insert**;
+- the delete → insert → fill decomposition used here is strictly more flexible.
 
-### 9.2 Track-aware Attention Bias (T1.1)
+### 8.3 Position within music AI
 
-**方法**：在 attention score 上注入可学习的声部关系偏置。
+| Method | Generation style | Length handling | Context |
+|--------|------------------|-----------------|---------|
+| Music Transformer (Huang et al.) | AR | Fixed or EOS | Left only |
+| MuseNet (OpenAI) | AR | Fixed | Left only |
+| MusicBERT + Mask-Predict | NAR | Fixed | Bidirectional |
+| **IterEdit (ours)** | **NAR, iterative** | **Adaptive** | **Bidirectional** |
+
+The distinctive claim is length-adaptive bidirectional editing for symbolic music.
+
+---
+
+## 9. Track-Coordinated Editing (explored)
+
+> **Status.** This section records a line of work that was explored during development.
+> The **track-aware attention bias (§9.2) was measured and it hurts** — it is not part of
+> the released model, and `src/iteredit/training/*.py` explicitly strips any `track_bias`
+> tensor from a loaded checkpoint. The **conditional track editing idea (§9.3) did ship**,
+> but in a different form from the one sketched below: rather than a `melody_only` /
+> `accomp_only` masking mode, the released code realizes it through dedicated datasets
+> (`data/dataset_editing.py`, `data/dataset_accomp_inpainting.py`) that perturb or mask
+> the accompaniment while keeping the melody as frozen context.
+
+### 9.1 Motivation: modelling voice relationships explicitly
+
+In a dual-track piece the tokens of both voices sit in one sequence, and self-attention
+treats them all alike. But music has two fundamentally different kinds of dependency:
+
+- **Within-voice**: the melodic line must flow; the accompaniment figuration must stay consistent.
+- **Cross-voice**: harmonic compatibility (no clashing intervals), rhythmic complementarity (the accompaniment thins out where the melody is dense).
+
+A standard Transformer has to learn the difference between these implicitly from data.
+Since the encoding already carries voice information (the `SPLIT_0` / `SPLIT_1` markers),
+the idea was to inject that structural prior into attention explicitly.
+
+### 9.2 Track-aware attention bias — measured, and rejected
+
+**Method.** Add a learnable voice-relationship bias to the attention scores:
 
 $$\text{attn}(h, i, j) \mathrel{+}= \text{track\_bias}[h, \text{track}(i), \text{track}(j)]$$
 
-每个 token 被分配 `track_id ∈ {0=结构, 1=旋律, 2=伴奏}`。8 个 attention head 各自学习一个 3×3 偏置矩阵，共 72 个参数（+0.0002%）。
+Each token is assigned `track_id ∈ {0 = structural, 1 = melody, 2 = accompaniment}`. Each
+of the 8 attention heads learns its own 3×3 bias matrix, for 72 parameters in total
+(+0.0002%). The bias is injected as an additive float tensor of shape `(B × nH, L, L)`
+through the `mask` argument of PyTorch's `TransformerEncoder`, so no attention-layer code
+has to change. Initializing at zero makes it a no-op at the start of training, leaving the
+pre-trained weights undisturbed.
 
-**实现方式**：通过 PyTorch `TransformerEncoder` 的 `mask` 参数注入 additive float tensor `(B×nH, L, L)`，无需修改 attention 层代码。
+**Result.** It degrades performance on both tasks: on Scheme A, editing beat exact match
+falls from .448 to .428 (−4.5%) and correction from .719 to .666 (−7.4%). The conclusion
+reported in the paper is that shared attention already captures the inter-track
+dependencies, and the explicit structural bias adds nothing but constraint. The released
+model does not include it.
 
-**设计选择**：
+The alternatives that were considered and not taken, recorded for completeness:
 
-| 备选方案 | 未选原因 |
-|----------|---------|
-| Track embedding 加到 hidden state | 永久改变表示空间；bias 只调节"谁关注谁"，更精确 |
-| 单一全局 bias（非 per-head） | 限制表达力；不同 head 可学不同声部交互模式 |
-| 固定正/负 bias | 丧失灵活性；让模型自己学什么关系有利 |
+| Alternative | Why not |
+|-------------|---------|
+| Add a track embedding to the hidden state | Permanently changes the representation space; a bias only modulates "who attends to whom", which is more targeted |
+| A single global bias (not per-head) | Limits expressiveness; different heads could learn different voice-interaction patterns |
+| A fixed positive/negative bias | Gives up flexibility; better to let the model learn which relations help |
 
-**初始化全零** → 训练初期等同无 bias，不破坏预训练权重。旧 checkpoint 可通过 `strict=False` 加载，track_bias 从零开始训练。
+### 9.3 Conditional track editing
 
-**贡献定位**：声部标记已存在于 BEAT 编码中（SPLIT_0/SPLIT_1）。T1.1 的贡献是**归纳偏置的注入**——将已有结构信息显式注入 attention 机制。类似 positional encoding 将位置信息显式注入，虽然位置信息本身已隐含在 token 顺序中。
+**Motivation.** If both voices are corrupted during training, the model only ever learns
+"recover both tracks from noise at once". The commoner scenario in real composition is:
+**the melody is given, generate or repair the accompaniment**.
 
-### 9.3 条件式声部修复 (T1.2 Conditional Track Inpainting)
+**How the released code does it.** The accompaniment-editing and accompaniment-inpainting
+datasets perturb or mask the accompaniment track only, and leave the melody intact as
+context. The constraint then falls out of the data construction and the editable-flag
+mechanism, with **no change to the loss function or the model architecture**:
 
-**动机**：标准训练中两个声部同时被 corrupt，模型只学会"从噪声中同时恢复两轨"。但实际音乐创作中更常见的场景是：**旋律已知，生成配套伴奏**（或反之）。
+1. `editable` / `token_editable` marks which tokens inside the region may be edited (target voice = True, everything else = False).
+2. Frozen tokens keep their value throughout intermediate-state sampling — never deleted, never replaced.
+3. The Levenshtein DP therefore emits `del = 0, ins = 0` for the frozen tokens automatically, since they are identical in the intermediate state and in the target.
+4. At inference the input is the **complete sequence** (the region is not cut out), the frozen voice stays as context, `editable` is True only for the target voice's tokens, and no `insertion_seed` is needed because the region already contains editable tokens. The ordinary delete → insert → fill loop is reused unchanged.
 
-**方法**：训练时随机混合三种 masking 模式：
+**The capability gained**: one model, several uses — accompaniment editing, accompaniment
+generation under a given melody, and (symmetrically) melody repair under a given
+accompaniment.
 
-| 模式 | 比例 | 行为 |
-|------|------|------|
-| `both` | 60% | 两个声部都 corrupt（原始行为） |
-| `melody_only` | 20% | 只 corrupt 旋律，伴奏完整保留为上下文 |
-| `accomp_only` | 20% | 只 corrupt 伴奏，旋律完整保留为上下文 |
+### 9.4 Voice identification per encoding scheme
 
-**核心机制**：
+| Scheme | Voice marker | Strategy |
+|--------|--------------|----------|
+| A (abs/separated) | `TRACK0_START` / `TRACK1_START` | Switch state on the marker |
+| B (rel/separated) | No explicit marker | Beat alternation: even = melody, odd = accompaniment |
+| C (rel/bundled) | `SPLIT_0` / `SPLIT_1` | Switch on the marker, plus EMPTY alternation |
+| D (abs/bundled) | `SPLIT_0` / `SPLIT_1` | Same as Scheme C |
 
-1. `token_editable` 标记 mask 区域内哪些 token 可编辑（目标声部=True, 其余=False）
-2. Frozen token 在中间状态采样时始终保持原值——不删除、不替换
-3. Levenshtein DP 自然为 frozen token 生成 `del=0, ins=0` 标签（因为它们在中间状态和目标中完全相同）
-4. **约束完全通过数据构造实现，不需要修改 loss 函数或模型架构**
-
-**推理端适配**：新增 `inpaint_track_conditional()` 方法。与标准 `inpaint()` 的关键区别：
-- 输入是**完整序列**（不删除 mask 区域），frozen 声部保留作为上下文
-- `editable` 标记仅对目标声部的 token 设为 True
-- 不需要 `insertion_seed`（mask 区域内已有 editable token）
-- 复用已有的 del→ins→fill 迭代循环，editable 约束机制天然适用
-
-**获得的新能力**：同一个模型，三种使用方式——双轨修复、给定旋律生成伴奏、给定伴奏修复旋律。
-
-### 9.4 各编码方案的声部识别
-
-| Scheme | 声部标记机制 | get_track_ids 策略 |
-|--------|------------|-------------------|
-| A (rel/unbundled) | 无显式标记 | beat 交替：偶数=旋律, 奇数=伴奏 |
-| B (abs/unbundled) | TRACK0_START / TRACK1_START | 遇到标记切换状态 |
-| C (rel/bundled) | SPLIT_0 / SPLIT_1 | 遇到标记切换 + EMPTY 交替 |
-| D (abs/bundled) | SPLIT_0 / SPLIT_1 | 同 Scheme C |
-
-输出统一为 `{0=结构, 1=旋律, 2=伴奏}`，上层的 attention bias 和 conditional masking 代码完全一致。
-
----
-
-## 10. 对比实验设计
-
-### 10.1 Baseline 方法
-
-所有方法使用**完全相同的确定性 mask 位置**（中间 30% beats，seed=42），确保公平对比。
-
-| Baseline | 方法 | 回答的问题 |
-|----------|------|-----------|
-| **Random** | 从训练集 unigram 分布采样 | 模型是否真的学到了音乐规律？ |
-| **Copy-Context** | 复制相邻 beats 填充 | 模型是否超越"复制粘贴"？音乐有重复性，这个 baseline 不弱 |
-| **BERT Mask-Predict** | CMLM 迭代解码（并行填充，线性衰减 remask） | 迭代编辑（LevT）vs 并行填充（CMLM），非自回归框架内部对比 |
-| **Vanilla LevT** | 去掉受约束 DP，全序列可编辑 | 受约束 DP 是否必要？ |
-
-**BERT Mask-Predict 的解码算法**（Ghazvininejad et al., 2019 CMLM）：
-1. 初始：context_left + [MASK]×gt_length + context_right
-2. 每轮 t (共 T=10 轮)：BERT forward → argmax 预测 + confidence (max softmax prob)
-3. 保留 confidence 最高的预测，重新 mask 最低 confidence 的 $\lfloor n \times \frac{T-t-1}{T} \rfloor$ 个位置
-4. 最后一轮全部 argmax，不再 remask
-
-### 10.2 评估指标体系
-
-| 维度 | 指标 | 意义 |
-|------|------|------|
-| 序列精度 | Token Accuracy | 逐位置精确匹配率 |
-| 序列精度 | Normalized Edit Distance | 编辑距离 / 目标长度，越小越好 |
-| 音高 | Pitch Accuracy | 仅比较 token 的音高分量 (`token // 81`) |
-| 节奏 | Pattern Accuracy | 仅比较 token 的节奏分量 (`token % 81`) |
-| 节奏 | Rhythm Accuracy | 同 pattern，但忽略音高的独立评估 |
-| 帧级 | Framewise F1 | 解码为钢琴卷后逐帧 precision/recall/F1，更接近听感 |
-| 结构 | Length Accuracy | 生成长度 / 目标长度 |
-| 结构 | Note Density Ratio | 修复区域音符密度 / 上下文音符密度 |
-| 效率 | Average Iterations | 收敛轮数（仅 LevT） |
-
-**Pitch vs Rhythm 分离评估**：将音符的两个正交维度（音高 + 节奏）独立评估，诊断模型在哪个维度更强/更弱。
-
-**Framewise F1**：将 token 序列解码回 `(88, T)` 二值钢琴卷矩阵（88 钢琴键 × T 时间帧），在物理时间-音高空间做帧级评估。这比 token 级指标更接近人耳听感，因为一个"错误"的 token 在钢琴卷上可能只偏差 1-2 个半音（仍然可接受），但 token accuracy 会判为完全错误。
-
-### 10.3 消融实验设计
-
-| 消融项 | 对比设置 | 验证的假设 |
-|--------|---------|-----------|
-| 有/无 Track-aware bias | T1.1 模型 vs 原始模型 | 声部关系偏置是否提升质量 |
-| 有/无 Conditional Inpainting | T1.2 模型 vs 仅 T1.1 | 条件训练是否提升单轨修复 |
-| Beat-boundary vs Random span | 修改 masking 策略 | 音乐先验是否优于通用策略 |
-| BERT 初始化 vs 随机初始化 | 从零训练 | 预训练权重的价值 |
-| 受约束 vs 全序列 DP | Vanilla LevT baseline | 约束是否必要 |
+The `SCHEME_TOKENS` table in `src/iteredit/data/dataset_editing.py` records the marker IDs
+per scheme (`track0` / `track1`; note that Scheme B has none, so its voices are recovered
+positionally). Because the beat-level interleaving is positional, separating the
+accompaniment is a matter of indexing.
 
 ---
 
-## 11. 局限性与未来方向
+## 10. Evaluation Design
 
-| 局限 | 分析 | 状态 |
-|------|------|------|
-| 训练-推理不匹配 | 训练用随机采样，推理用模型自身输出 | 未解决 (E2: DAgger-style) |
-| 固定破坏分布 | 30/20/50 可能非最优 | 未解决 (E3: Curriculum Learning) |
-| 上下文软约束 | Loss mask ≠ 硬冻结 | 未解决 (E5: 训练时硬约束) |
-| max_insert=20 偏大 | 实际分布可能集中在 0-10 | 未解决 (E7: 数据驱动上界) |
-| ~~仅全 beat 遮盖~~ | ~~无法处理单轨修复~~ | **已解决** (§9.3 T1.2) |
-| 声部标记不统一 | 4 scheme 各自实现 get_track_ids | 待讨论 |
+### 10.1 Baselines
+
+All methods use **exactly the same deterministic mask positions** (the middle 30% of the
+beats, `seed = 42`) so that the comparison is fair.
+
+The baselines reported in the paper are:
+
+| Baseline | Method | Question it answers |
+|----------|--------|---------------------|
+| **No-Edit** | Return the input unchanged | Is the model doing anything at all? Calibrates the corruption difficulty |
+| **Copy-Ctx** | Copy a random context beat into the corrupted region | Does the model beat copy-and-paste? Music is repetitive, so this is not a weak baseline |
+| **BERT-CMLM** | Re-predict every position by masked language modelling (parallel filling, linearly decaying remask) | Iterative editing vs. parallel filling: a comparison *within* the non-autoregressive family |
+| **AR (LLaMA)** | ~162 M causal LM trained from scratch on the same data; AR-Detect uses SeqTag's detector for beat-level localization | Does editing beat autoregressive regeneration given the same localization? |
+| **Anticipatory** | ~128 M AR model with bidirectional infilling (public weights) | A purpose-built music-infilling AR model, on completion |
+| **Diffusion (D3PM)** | ~34 M discrete diffusion, SDEdit-style noise-then-denoise | Editing vs. the diffusion paradigm |
+
+A **vanilla IterEdit** configuration (contiguous masking, without multi-level
+perturbation) also appears in the paper's ablation, and answers whether the multi-level
+perturbation training is necessary. It is.
+
+**The BERT-CMLM decoding algorithm** (Ghazvininejad et al., 2019):
+1. Initialize: `context_left + [MASK]×gt_length + context_right`.
+2. Each round $t$ (of $T = 10$): BERT forward → argmax prediction + confidence (max softmax probability).
+3. Keep the highest-confidence predictions; re-mask the $\lfloor n \times \frac{T-t-1}{T} \rfloor$ lowest-confidence positions.
+4. On the final round, take argmax everywhere and do not re-mask.
+
+### 10.2 Metrics
+
+The paper's headline metrics, computed by `evaluation/metrics.py`, are beat exact match,
+note F1, mean pitch error, chroma F1, rhythm similarity, context preservation, and FMD
+(Fréchet Music Distance).
+
+IterEdit additionally has a token-level evaluator of its own
+(`src/iteredit/evaluation/evaluate.py`) used for development and diagnosis:
+
+| Dimension | Metric | Meaning |
+|-----------|--------|---------|
+| Sequence accuracy | Token Accuracy | Fraction of positions matching exactly |
+| Sequence accuracy | Normalized Edit Distance | Edit distance / target length; lower is better |
+| Pitch / position | Pitch Accuracy | Compares only the position component of the token (`token // 81`) — for Scheme C this is the *relative* position component |
+| Rhythm | Pattern Accuracy | Compares only the ternary-pattern component (`token % 81`) |
+| Structure | Length Accuracy | Generated length / target length |
+| Structure | Note Density Ratio | Note density of the repaired region / note density of the context |
+| Efficiency | Average Iterations | Rounds to convergence (IterEdit only) |
+
+**Separating pitch from rhythm** evaluates the two orthogonal dimensions of a note
+independently, which diagnoses whether the model is stronger on one than the other.
+
+### 10.3 Ablations
+
+| Ablation | Comparison | Hypothesis under test | Outcome |
+|----------|------------|-----------------------|---------|
+| Multi-level perturbation vs. contiguous masking | Full vs. vanilla | Is multi-level perturbation needed to generalize to fine-grained editing? | Yes: .480 vs. .114 on editing (≈4×) |
+| Encoder-only vs. encoder–decoder | Enc-Dec cross-attention variant | Is the encoder-only inductive bias load-bearing? | Yes: Enc-Dec collapses (.051 / .034) |
+| BERT initialization vs. random | Train from scratch | What is pre-training worth? | Large: scratch loses ~70% of correction beat |
+| With / without track-aware bias | §9.2 | Does an explicit voice-relation bias help? | **No** — it degrades both tasks (§9.2) |
+| Encoding scheme | A / B / C / D | Does encoding choice matter for editing? | Substantially, with a significant encoding × method interaction |
+
+---
+
+## 11. Limitations and Future Directions
+
+| Limitation | Analysis | Status |
+|------------|----------|--------|
+| Train–inference mismatch | Training rolls in from random corruption; inference rolls in from the model's own output | Open (DAgger-style roll-in) |
+| Fixed corruption distribution | 0.3 / 0.2 / 0.5 may not be optimal | Open (curriculum learning) |
+| Soft context constraint in the completion mode | A loss mask is not a hard freeze | Open (hard constraint at training time) |
+| `max_insert = 20` may be generous | The empirical distribution is probably concentrated in 0–10 | Open (data-driven upper bound) |
+| ~~Whole-beat masking only~~ | ~~Cannot do single-track editing~~ | **Resolved** (§9.3: accompaniment-editing and accompaniment-inpainting datasets) |
+| Voice markers are not uniform across schemes | The four schemes identify voices differently (§9.4); Scheme B has no explicit marker | Known; handled by the per-scheme `SCHEME_TOKENS` table |
+| Weak on segment completion | Iterative refinement from an empty span is a poor fit; TagFill is the right tool there (paper §5.2) | By design — this delineates the edit-density boundary |
 
 ---
 
@@ -614,3 +804,5 @@ $$\text{attn}(h, i, j) \mathrel{+}= \text{track\_bias}[h, \text{track}(i), \text
 3. Huang, C. A., et al. (2019). Music Transformer: Generating Music with Long-Term Structure. *ICLR*.
 4. Vaswani, A., et al. (2017). Attention Is All You Need. *NeurIPS*.
 5. Devlin, J., et al. (2019). BERT: Pre-training of Deep Bidirectional Transformers. *NAACL*.
+6. Thickstun, J., et al. (2024). Anticipatory Music Transformer. *TMLR*.
+7. Austin, J., et al. (2021). Structured Denoising Diffusion Models in Discrete State-Spaces (D3PM). *NeurIPS*.

@@ -22,11 +22,21 @@ Before compression, each beat of each track is converted to **patch tokens** usi
 
 - **patch_h = 1, patch_w = 4**: Each patch covers 1 pitch position x 4 time steps
 - For each patch, the two channels (sustain + onset) are combined into a ternary digit:
-  - `0`: no note (sustain=0, onset=0)
-  - `1`: sustain only (sustain=1, onset=0)
-  - `2`: onset + sustain (sustain=1, onset=1)
+  - `0`: silent (sustain=0, onset=0)
+  - `1`: onset (sustain=1, onset=1) — a new note strike at this time step
+  - `2`: sustain continuation (sustain=1, onset=0) — the key is held from a previous step
 - Four ternary digits are encoded as a single base-3 number: `value = d0*27 + d1*9 + d2*3 + d3`
 - This produces **81 possible patch token values** (0 to 80), representing `3^4 = 81` patterns
+
+Common patterns (paper Appendix A.2):
+
+| Ternary | Value | Musical meaning |
+|---------|-------|-----------------|
+| (1,2,2,2) | 53 | Quarter note (onset + sustain) |
+| (1,2,1,2) | 50 | Two eighth notes |
+| (1,0,0,0) | 27 | Sixteenth note (staccato) |
+| (2,2,2,2) | 80 | Sustained from the previous beat |
+| (0,0,0,0) | 0  | Silent (not encoded) |
 
 After patch tokenization, each beat (which has `patch_w=4` time steps) of one track becomes a 1D array of 88 patch token values (one per pitch position). Most values are 0 (silence).
 
