@@ -24,10 +24,11 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, Sampler
 
-# LevT project root
+# IterEdit package root (<repo>/src/iteredit) and the evaluation package
+# (<repo>/evaluation), which provides the shared per-scheme loader.
 LEVT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PREVIOUS_DIR = os.path.dirname(LEVT_DIR)
-UNIFIED_DIR = os.path.join(PREVIOUS_DIR, 'evaluation')
+ROOT_DIR = os.path.dirname(os.path.dirname(LEVT_DIR))
+UNIFIED_DIR = os.path.join(ROOT_DIR, 'evaluation')
 sys.path.insert(0, LEVT_DIR)
 sys.path.insert(0, UNIFIED_DIR)
 

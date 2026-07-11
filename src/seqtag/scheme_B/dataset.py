@@ -23,13 +23,12 @@ from config import (
 from perturbation import perturb_sequence
 from label_extractor import extract_labels
 
-# Import PianoRollTokenizer from music_bert without polluting sys.path
-MUSIC_BERT_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    'music_bert'
-)
+# Import PianoRollTokenizer from the Scheme B encoding module
+# (<repo>/src/encoding/scheme_B/my_tokenizer.py) without polluting sys.path
+_SRC_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+MUSIC_BERT_DIR = os.path.join(_SRC_DIR, 'encoding', 'scheme_B')
 _spec = importlib.util.spec_from_file_location(
-    "music_bert_tokenizer",
+    "encoding_scheme_B_tokenizer",
     os.path.join(MUSIC_BERT_DIR, "my_tokenizer.py"),
 )
 _mod = importlib.util.module_from_spec(_spec)
