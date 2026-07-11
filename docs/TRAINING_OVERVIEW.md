@@ -323,10 +323,10 @@ Scheme B leads by a wide margin and has generally higher accuracy on the APPEND 
 
 | Scheme | Tagger | Inserter |
 |------|--------|----------|
-| A | `checkpoints/tagfill/scheme_A/tagger_best.pt` | `checkpoints/tagfill/scheme_A/inserter_best.pt` |
-| B | `checkpoints/tagfill/scheme_B/tagger_best.pt` | `checkpoints/tagfill/scheme_B/inserter_best.pt` |
-| C | `checkpoints/tagfill/scheme_C/tagger_best.pt` | `checkpoints/tagfill/scheme_C/inserter_best.pt` |
-| D | `checkpoints/tagfill/scheme_D/tagger_best.pt` | `checkpoints/tagfill/scheme_D/inserter_best.pt` |
+| A | `checkpoints/tagfill/scheme_A/tagger/tagger_best.pt` | `checkpoints/tagfill/scheme_A/inserter/inserter_best.pt` |
+| B | `checkpoints/tagfill/scheme_B/tagger/tagger_best.pt` | `checkpoints/tagfill/scheme_B/inserter/inserter_best.pt` |
+| C | `checkpoints/tagfill/scheme_C/tagger/tagger_best.pt` | `checkpoints/tagfill/scheme_C/inserter/inserter_best.pt` |
+| D | `checkpoints/tagfill/scheme_D/tagger/tagger_best.pt` | `checkpoints/tagfill/scheme_D/inserter/inserter_best.pt` |
 
 ### 7.9 Problems Encountered During Training
 

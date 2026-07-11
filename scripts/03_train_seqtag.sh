@@ -20,6 +20,13 @@ SCHEME="${SCHEME:-A}"  # A, B, C, or D
 
 echo "=== SeqTag Training: Scheme $SCHEME ==="
 
+# Resolve paths before cd'ing into the source tree, so relative values
+# (including the defaults below) stay anchored at the repository root.
+abspath() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s' "$PWD/$1" ;; esac; }
+OUTPUT_BASE="$(abspath "$OUTPUT_BASE")"
+DATA_DIR="$(abspath "$DATA_DIR")"
+BERT_CKPT="$(abspath "$BERT_CKPT")"
+
 cd "src/seqtag/scheme_$SCHEME"
 
 # Stage I: Synthetic error training (freeze BERT for 2 epochs, then fine-tune)

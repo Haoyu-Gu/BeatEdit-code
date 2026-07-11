@@ -22,6 +22,13 @@ SCHEME="${SCHEME:-A}"  # A, B, C, or D
 
 echo "=== TagFill Training: Scheme $SCHEME ==="
 
+# Resolve paths before cd'ing into the source tree, so relative values
+# (including the defaults below) stay anchored at the repository root.
+abspath() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s' "$PWD/$1" ;; esac; }
+OUTPUT_BASE="$(abspath "$OUTPUT_BASE")"
+DATA_DIR="$(abspath "$DATA_DIR")"
+BERT_CKPT="$(abspath "$BERT_CKPT")"
+
 cd "src/tagfill/scheme_$SCHEME"
 
 # Stage 1: Train Tagger (with BERT pre-training init)
@@ -30,6 +37,7 @@ accelerate launch training/train_tagger.py \
     --data_dir "$DATA_DIR" \
     --pretrained_bert "$BERT_CKPT" \
     --output_dir "$OUTPUT_BASE/scheme_$SCHEME/tagger" \
+    --tb_dir "$OUTPUT_BASE/scheme_$SCHEME/tagger/tb_logs" \
     --epochs "${BEATEDIT_EPOCHS:-30}" \
     --batch_size "${BEATEDIT_BATCH:-32}" \
     --gradient_accumulation 3 \
@@ -45,6 +53,7 @@ accelerate launch training/train_inserter.py \
     --data_dir "$DATA_DIR" \
     --pretrained_bert "$BERT_CKPT" \
     --output_dir "$OUTPUT_BASE/scheme_$SCHEME/inserter" \
+    --tb_dir "$OUTPUT_BASE/scheme_$SCHEME/inserter/tb_logs" \
     --epochs "${BEATEDIT_EPOCHS:-30}" \
     --batch_size "${BEATEDIT_BATCH:-32}" \
     --gradient_accumulation 3 \

@@ -138,19 +138,37 @@ BERT Pre-training (§3.1)
 ```bash
 # Step 1: Pre-train BERT (all 4 schemes)
 for s in A B C D; do
-    SCHEME=$s DATA_DIR=/path/to/data bash scripts/02_pretrain_bert.sh
+    SCHEME=$s DATA_DIR=/path/to/data/npz bash scripts/02_pretrain_bert.sh
 done
 
-# Step 2: Train methods (can run in parallel across schemes)
-SCHEME=A DATA_DIR=/path/to/data BERT_CKPT=checkpoints/bert/scheme_A/best.pt \
-    bash scripts/03_train_seqtag.sh
+# Step 2: Train methods (can run in parallel across schemes).
+# BERT_CKPT is the checkpoint *directory* written by step 1 — it holds
+# model.safetensors. Use best_model/ once evaluation has run, final_model/
+# otherwise.
+BERT_A=checkpoints/bert/scheme_A/best_model
+BERT_D=checkpoints/bert/scheme_D/best_model
 
-SCHEME=A DATA_DIR=/path/to/data BERT_CKPT=checkpoints/bert/scheme_A/best.pt \
-    bash scripts/05_train_tagfill.sh
+SCHEME=A DATA_DIR=/path/to/data/npz BERT_CKPT=$BERT_A \
+    bash scripts/03_train_seqtag.sh      # Stage I -> Stage III
 
-DATA_DIR=/path/to/data BERT_CKPT=checkpoints/bert/scheme_D/best.pt \
-    bash scripts/04_train_iteredit.sh
+SCHEME=A DATA_DIR=/path/to/data/npz BERT_CKPT=$BERT_A \
+    bash scripts/05_train_tagfill.sh     # tagger -> inserter
+
+DATA_DIR=/path/to/data/npz BERT_CKPT=$BERT_D \
+    bash scripts/04_train_iteredit.sh    # inpainting -> editing
 ```
+
+**Pilot run.** The whole pipeline runs on a laptop (CPU) with a shrunken
+backbone — useful to check the setup before committing GPU hours:
+
+```bash
+BEATEDIT_LAYERS=2 BEATEDIT_HIDDEN=128 BEATEDIT_HEADS=4 BEATEDIT_FFN=256 \
+BEATEDIT_EPOCHS=2 BEATEDIT_BATCH=4 \
+    SCHEME=A DATA_DIR=/path/to/data/npz bash scripts/02_pretrain_bert.sh
+```
+The same `BEATEDIT_*` values must be set for every downstream stage, since the
+model has to match the checkpoint it is initialized from. fp16 is downgraded
+automatically when CUDA is unavailable (`BEATEDIT_PRECISION` overrides).
 
 ### 4. Evaluation
 ```bash

@@ -281,8 +281,9 @@ class FELIXLoader:
 
     def load_pipeline(self, device='cuda'):
         """Load the FELIX (TagFill) Tagger+Inserter pipeline."""
-        # NOTE: adjust to your checkpoint layout — TagFill checkpoints live under
-        # checkpoints/tagfill/scheme_X/ in the release tree.
+        # Layout written by scripts/05_train_tagfill.sh:
+        #   checkpoints/tagfill/scheme_X/tagger/tagger_best.pt
+        #   checkpoints/tagfill/scheme_X/inserter/inserter_best.pt
         tagfill_ckpt_dir = os.path.join(ROOT_DIR, 'checkpoints', 'tagfill', f'scheme_{self.scheme}')
         tagger_path = os.path.join(tagfill_ckpt_dir, 'tagger', 'tagger_best.pt')
         inserter_path = os.path.join(tagfill_ckpt_dir, 'inserter', 'inserter_best.pt')

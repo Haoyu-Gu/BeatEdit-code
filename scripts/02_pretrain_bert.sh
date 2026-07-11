@@ -19,6 +19,12 @@ SCHEME="${SCHEME:-A}"  # A, B, C, or D
 
 echo "=== BERT MLM Pre-training: Scheme $SCHEME ==="
 
+# Resolve paths before cd'ing into the source tree, so relative values
+# (including the defaults below) stay anchored at the repository root.
+abspath() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s' "$PWD/$1" ;; esac; }
+OUTPUT_BASE="$(abspath "$OUTPUT_BASE")"
+DATA_DIR="$(abspath "$DATA_DIR")"
+
 cd "src/pretraining/scheme_$SCHEME"
 
 # Paper defaults; override with the BEATEDIT_* environment variables
