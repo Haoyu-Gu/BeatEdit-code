@@ -1,6 +1,17 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# Run outputs
 checkpoints/**/*.pt
 checkpoints/**/*.safetensors
+checkpoints/**/*.bin
+checkpoints/**/*.pkl
+**/tb_logs/
+**/logs/
+events.out.tfevents.*
 *.log
+
+# Data
+data/
+*.npz
