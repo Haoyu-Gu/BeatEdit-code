@@ -18,6 +18,7 @@ Official implementation for the ACM Multimedia 2026 paper.
 | **REMI baseline** | `src/baselines/remi/` | &mdash; | &sect;4.2 |
 | **Decode-Filter-Reencode** | `src/seqtag/scheme_*/inference.py` (`post_process`) | &mdash; | Appendix E/F |
 | **Perturbation / edit labels** | `src/{seqtag,tagfill}/scheme_*/perturbation.py`, `label_extractor.py` | &mdash; | Appendix B/G |
+| **Score → npz preprocessing** | `data_prep/` | `XMLToNPZ` | &sect;4.1 |
 
 ### Encoding Schemes (2 x 2 factorial design)
 
@@ -91,6 +92,9 @@ BeatEdit/
 │   ├── master_statistics.json   #   Aggregated results (155 groups)
 │   └── benchmark_results.json   #   Inference speed data
 │
+├── data_prep/                   # Score -> npz preprocessing
+│   ├── xml2npz.py               #   MusicXML (MuseScore) -> npz
+│   └── midi2npz.py              #   MIDI (Lakh) -> npz
 ├── scripts/                     # Step-by-step reproduction scripts (00-07)
 ├── checkpoints/                 # Model weights (populate after training)
 └── docs/                        # ENCODING_SPEC, TRAINING_OVERVIEW, METHOD_LevT, ...
@@ -110,10 +114,15 @@ bash scripts/00_setup.sh
 
 ### 2. Data Preparation
 ```bash
-bash scripts/01_download_data.sh
-# Download the MuseScore collection and preprocess into npz format.
-# Set BEATEDIT_DATA_DIR to your preprocessed data directory.
+bash scripts/01_download_data.sh          # download guide (MuseScore, Lakh)
+
+# Convert scores to the npz piano-roll format the training code reads
+python data_prep/xml2npz.py  /path/to/musescore/ --output-dir /path/to/data/npz --workers 8
+export BEATEDIT_DATA_DIR=/path/to/data/npz
 ```
+`data_prep/` also has `midi2npz.py` for MIDI sources, and a `--velocity` flag
+that emits 6-channel arrays (velocity is off by default, as in the paper).
+See [data_prep/README.md](data_prep/README.md) for the format and its caveats.
 
 ### 3. Training Pipeline
 

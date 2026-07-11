@@ -1,6 +1,7 @@
 # BeatEdit developer entry points.
 #
 #   make setup                      create .venv and install dependencies
+#   make data IN=<scores> OUT=<npz>  convert MusicXML scores to npz
 #   make verify                     fast correctness checks (no GPU, no data)
 #   make demo                       side-by-side encoding demo (schemes A-D)
 #   make pretrain SCHEME=A          pre-train Music BERT for one scheme
@@ -19,7 +20,7 @@
 SCHEME ?= A
 PY     ?= python3
 
-.PHONY: setup verify demo compile-check pretrain seqtag tagfill iteredit eval tables pipeline clean
+.PHONY: setup verify demo data compile-check pretrain seqtag tagfill iteredit eval tables pipeline clean
 
 setup:
 	bash scripts/setup_env.sh
@@ -27,14 +28,18 @@ setup:
 verify: compile-check
 	$(PY) tools/encoding_demo.py
 	$(PY) tests/test_encoding.py
+	$(PY) tests/test_data_prep.py
 	$(PY) evaluation/verify_filter_roundtrip.py --n 200 --scheme A
 	$(PY) evaluation/verify_filter_roundtrip.py --n 200 --scheme B
 
 demo:
 	$(PY) tools/encoding_demo.py
 
+data:
+	$(PY) data_prep/xml2npz.py $(IN) --output-dir $(OUT) --workers 8
+
 compile-check:
-	$(PY) -m compileall -q src evaluation tools tests
+	$(PY) -m compileall -q src evaluation tools tests data_prep
 
 pretrain:
 	SCHEME=$(SCHEME) bash scripts/02_pretrain_bert.sh

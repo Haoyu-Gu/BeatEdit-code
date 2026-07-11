@@ -14,6 +14,7 @@ safetensors>=0.3.0
 miditok>=2.1.0
 pretty_midi>=0.2.10
 symusic>=0.4.0          # REMI/CPWord baseline tokenizers
+music21>=8.1.0          # MusicXML parsing (data_prep/)
 
 # Evaluation & Statistics
 scipy>=1.10.0
