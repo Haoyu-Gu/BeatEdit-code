@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install minimal dependencies
+        run: pip install numpy
+      - name: Syntax check (all Python files)
+        run: python -m compileall -q src evaluation tools tests
+      - name: Encoding tests (schemes A-D, numpy only)
+        run: python tests/test_encoding.py
+      - name: Encoding demo
+        run: python tools/encoding_demo.py

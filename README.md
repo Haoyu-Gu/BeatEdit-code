@@ -159,6 +159,32 @@ over 200 random edit sequences including cuts into long notes:
 out-of-region beats preserved verbatim (100%), zero violations,
 100% decodable.
 
+## Developer conveniences
+
+```bash
+make setup      # create .venv, install deps, run smoke tests
+make demo       # side-by-side encoding of the same piece under schemes A-D
+make verify     # syntax check + encoding tests + Appendix E/F validity check
+make pipeline SCHEME=A DATA_DIR=/path/to/data   # full pipeline for one scheme
+```
+
+`tools/encoding_demo.py` encodes any note spec under all four schemes and
+prints the token sequences next to each other &mdash; the quickest way to see how
+the 2×2 design (absolute/relative × separated/bundled) plays out, and to
+sanity-check round-trips. `tests/test_encoding.py` runs numpy-only encoding
+tests (also wired into CI).
+
+**Model-size knobs.** The backbone can be resized without editing any config
+file &mdash; useful for pilot runs on small GPUs:
+
+```bash
+BEATEDIT_LAYERS=4 BEATEDIT_HIDDEN=256 BEATEDIT_EPOCHS=3 \
+    SCHEME=A DATA_DIR=/path/to/data bash scripts/02_pretrain_bert.sh
+```
+
+Recognized overrides: `BEATEDIT_LAYERS`, `BEATEDIT_HIDDEN`, `BEATEDIT_HEADS`,
+`BEATEDIT_FFN`, `BEATEDIT_EPOCHS`, `BEATEDIT_BATCH`, `BEATEDIT_DATA_DIR`.
+
 ## Metrics: token space vs. decoded space
 
 `evaluation/metrics.py` computes beat exact match in **token space**.
