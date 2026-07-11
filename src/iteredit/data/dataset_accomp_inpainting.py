@@ -6,7 +6,7 @@ Unlike vanilla inpainting (masks entire beats), this dataset:
 - Only removes accompaniment tokens
 - Trains the model to generate accomp conditioned on melody context
 
-This matches the unified_eval T2 inpainting test format.
+This matches the evaluation T2 inpainting test format.
 
 Flow per sample:
 1. Tokenize NPZ → target_tokens (full sequence)
@@ -27,7 +27,7 @@ from torch.utils.data import Dataset
 
 LEVT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PREVIOUS_DIR = os.path.dirname(LEVT_DIR)
-UNIFIED_DIR = os.path.join(PREVIOUS_DIR, 'unified_eval')
+UNIFIED_DIR = os.path.join(PREVIOUS_DIR, 'evaluation')
 sys.path.insert(0, LEVT_DIR)
 sys.path.insert(0, UNIFIED_DIR)
 

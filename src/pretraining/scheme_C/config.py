@@ -1,10 +1,10 @@
 """
-Music BERT 配置 (with_pair 编码方案)
+Music BERT configuration (with_pair encoding scheme).
 
-基于 with_pair 捆绑编码 (bundled encoding, vocab=7144)
-在原始音乐词表基础上增加 [MASK] token 用于 MLM 预训练
+Based on the with_pair bundled encoding (bundled encoding, vocab=7144).
+Adds a [MASK] token on top of the original music vocabulary for MLM pretraining.
 
-bundled_token = relative_position × 81 + patch_value, 范围 0-7127
+bundled_token = relative_position x 81 + patch_value, range 0-7127
 """
 from dataclasses import dataclass
 from typing import Literal
@@ -12,49 +12,49 @@ from typing import Literal
 
 @dataclass
 class MusicTokenConfig:
-    """音乐 token 编码配置 (with_pair 方案)"""
-    # Patch 编码参数
+    """Music token encoding configuration (with_pair scheme)."""
+    # Patch encoding parameters
     patch_h: int = 1
     patch_w: int = 4
-    pattern_num: int = 81     # 3^4 = 81 种三进制 pattern
-    beats_length: int = 88    # 88 钢琴键
+    pattern_num: int = 81     # 3^4 = 81 ternary patterns
+    beats_length: int = 88    # 88 piano keys
 
-    # 原始词表: 0-7143 (7144 tokens)
+    # Original vocabulary: 0-7143 (7144 tokens)
     original_vocab_size: int = 7144
 
-    # bundled token 范围
+    # bundled token range
     bundled_token_min: int = 0
     bundled_token_max: int = 7127
 
-    # 特殊 token IDs
-    empty_marker_id: int = 7128    # 空beat标记
-    split_0_id: int = 7129         # 高声部标记
-    split_1_id: int = 7130         # 低声部标记
-    bar_token_id: int = 7131       # 小节线
+    # Special token IDs
+    empty_marker_id: int = 7128    # empty-beat marker
+    split_0_id: int = 7129         # upper-voice marker
+    split_1_id: int = 7130         # lower-voice marker
+    bar_token_id: int = 7131       # bar line
     eos_token_id: int = 7132
     bos_token_id: int = 7133
     pad_token_id: int = 7134
-    time_sig_offset_id: int = 7135  # 7135-7139: 5种拍号
-    bpm_offset_id: int = 7140       # 7140-7143: 4种速度
+    time_sig_offset_id: int = 7135  # 7135-7139: 5 time signatures
+    bpm_offset_id: int = 7140       # 7140-7143: 4 tempo buckets
 
-    # MLM 新增
+    # Added for MLM
     mask_token_id: int = 7144      # [MASK] token
-    vocab_size: int = 7145         # 原始 7144 + [MASK]
+    vocab_size: int = 7145         # 7144 real tokens + [MASK]
 
-    # Note token 范围 (用于 MLM masking 判断)
-    # 只 mask bundled token (0-7127)，不 mask 控制 token (7128+)
+    # Note-token range (used to decide MLM masking)
+    # Only bundled tokens (0-7127) are masked; control tokens (7128+) are not
     note_token_min: int = 0
     note_token_max: int = 7127
 
     @property
     def special_token_ids(self):
-        """所有不应被 mask 的特殊 token"""
+        """All special tokens that must not be masked."""
         ids = [
             self.empty_marker_id, self.split_0_id, self.split_1_id,
             self.bar_token_id, self.eos_token_id, self.bos_token_id,
             self.pad_token_id, self.mask_token_id,
         ]
-        # 拍号 tokens
+        # Time-signature tokens
         ids.extend(range(self.time_sig_offset_id, self.time_sig_offset_id + 5))
         # BPM tokens
         ids.extend(range(self.bpm_offset_id, self.bpm_offset_id + 4))
@@ -63,8 +63,8 @@ class MusicTokenConfig:
 
 @dataclass
 class BertPretrainConfig:
-    """BERT 预训练超参数"""
-    # 模型架构
+    """BERT pretraining hyperparameters."""
+    # Model architecture
     hidden_size: int = 512
     num_hidden_layers: int = 8
     num_attention_heads: int = 8
@@ -73,13 +73,13 @@ class BertPretrainConfig:
     hidden_dropout_prob: float = 0.1
     attention_probs_dropout_prob: float = 0.1
 
-    # MLM 参数
-    mask_prob: float = 0.15       # 15% 的 note token 被选中
-    mask_replace_prob: float = 0.8   # 其中 80% 替换为 [MASK]
-    mask_random_prob: float = 0.1    # 10% 替换为随机 token
-    # 剩余 10% 保持原样
+    # MLM parameters
+    mask_prob: float = 0.15       # 15% of note tokens are selected
+    mask_replace_prob: float = 0.8   # 80% of those replaced with [MASK]
+    mask_random_prob: float = 0.1    # 10% replaced with a random token
+    # remaining 10% kept unchanged
 
-    # 训练参数
+    # Training parameters
     data_dir: str = "/path/to/data/npz"
     output_dir: str = "./checkpoints/music_bert_with_pair"
     num_epochs: int = 30
@@ -91,12 +91,25 @@ class BertPretrainConfig:
     max_seq_len: int = 2048
     mixed_precision: Literal["no", "fp16", "bf16"] = "fp16"
 
-    # 日志与保存
+    # Logging and saving
     log_every_n_steps: int = 50
     save_every_n_steps: int = 5000
     eval_every_n_steps: int = 1000
     test_split_ratio: float = 0.05
     random_seed: int = 42
+
+    def __post_init__(self):
+        # Quick overrides for experimentation without editing this file, e.g.:
+        #   BEATEDIT_LAYERS=4 BEATEDIT_HIDDEN=256 bash scripts/02_pretrain_bert.sh
+        import os
+        self.hidden_size = int(os.environ.get("BEATEDIT_HIDDEN", self.hidden_size))
+        self.num_hidden_layers = int(os.environ.get("BEATEDIT_LAYERS", self.num_hidden_layers))
+        self.num_attention_heads = int(os.environ.get("BEATEDIT_HEADS", self.num_attention_heads))
+        self.intermediate_size = int(os.environ.get("BEATEDIT_FFN", self.intermediate_size))
+        self.data_dir = os.environ.get("BEATEDIT_DATA_DIR", self.data_dir)
+        self.num_epochs = int(os.environ.get("BEATEDIT_EPOCHS", self.num_epochs))
+        self.batch_size = int(os.environ.get("BEATEDIT_BATCH", self.batch_size))
+
 
     # DataLoader
     num_workers: int = 4

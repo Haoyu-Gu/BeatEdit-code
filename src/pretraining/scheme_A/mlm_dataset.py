@@ -1,11 +1,11 @@
 """
-Music BERT MLM Dataset (no_pair 编码 - 绝对位置)
+Music BERT MLM dataset (no_pair encoding - absolute position).
 
-使用 no_pair 编码的 tokenization 逻辑，在 note token 上施加 MLM masking。
-与 no_pair_related 的区别:
-- 使用绝对位置编码 (非相对位置)
-- 使用 TRACK0_START/TRACK1_START 标记 (非 EMPTY/END marker)
-- 空beat: [track_marker, 0], 非空beat: [track_marker, pos, val, pos, val, ...]
+Uses the no_pair tokenization logic and applies MLM masking on note tokens.
+Differences from no_pair_related:
+- Uses absolute position encoding (not relative position).
+- Uses TRACK0_START/TRACK1_START markers (not EMPTY/END markers).
+- Empty beat: [track_marker, 0]; non-empty beat: [track_marker, pos, val, pos, val, ...].
 """
 import os
 import numpy as np
@@ -30,11 +30,10 @@ def encode_bpm(bpm):
 
 
 class MLMDataset(Dataset):
-    """
-    MLM 预训练数据集 (no_pair 绝对位置编码)
+    """MLM pretraining dataset (no_pair absolute position encoding).
 
-    从 npz 文件加载 piano roll，编码为 no_pair token 序列，
-    然后对 note token (0-168) 施加 MLM masking。
+    Loads a piano roll from an npz file, encodes it into a no_pair token
+    sequence, then applies MLM masking on note tokens (0-168).
     """
 
     def __init__(
@@ -51,7 +50,7 @@ class MLMDataset(Dataset):
         self.mode = mode
         self.max_seq_len = bert_config.max_seq_len
 
-        # 创建 tokenizer
+        # Create the tokenizer
         self.tokenizer = PianoRollTokenizer(
             patch_h=token_config.patch_h,
             patch_w=token_config.patch_w,
@@ -59,34 +58,34 @@ class MLMDataset(Dataset):
             beats_length=token_config.beats_length,
         )
 
-        # 加载文件列表
+        # Load the file list
         self.data_files = sorted([f for f in os.listdir(data_dir) if f.endswith('.npz')])
-        print(f"找到 {len(self.data_files)} 个 npz 文件")
+        print(f"Found {len(self.data_files)} npz files")
 
-        # 加载长度缓存
+        # Load the length cache
         cache_file = os.path.join(data_dir, '.lengths_cache_no_pair.pkl')
         self.file_lengths = None
         self.sorted_indices = None
 
         if cache_lengths and os.path.exists(cache_file):
-            print("加载长度缓存...")
+            print("Loading length cache...")
             with open(cache_file, 'rb') as f:
                 cache_data = pickle.load(f)
             self.data_files = cache_data['data_files']
             self.file_lengths = cache_data['lengths']
             self.sorted_indices = cache_data['sorted_indices']
-            print(f"缓存加载完成: {len(self.data_files)} 个文件")
+            print(f"Cache loaded: {len(self.data_files)} files")
         elif cache_lengths:
-            print(f"警告: 长度缓存不存在 ({cache_file})，不使用长度排序")
+            print(f"Warning: length cache not found ({cache_file}); length sorting disabled")
 
-        # 划分 train/test
+        # Split into train/test
         self._split_data()
 
-        # 特殊 token 集合
+        # Set of special tokens
         self._special_ids = token_config.special_token_ids
 
     def _split_data(self):
-        """按歌曲级别划分 train/test"""
+        """Split into train/test at the song level."""
         total = len(self.data_files)
         rng = np.random.RandomState(self.bc.random_seed)
         indices = np.arange(total)
@@ -97,13 +96,13 @@ class MLMDataset(Dataset):
 
         if self.mode == 'train':
             selected = indices[:train_size]
-            print(f"训练集: {len(selected)} 个文件")
+            print(f"Training set: {len(selected)} files")
         elif self.mode == 'test':
             selected = indices[train_size:]
-            print(f"测试集: {len(selected)} 个文件")
+            print(f"Test set: {len(selected)} files")
         else:
             selected = indices
-            print(f"全部数据: {len(selected)} 个文件")
+            print(f"All data: {len(selected)} files")
 
         self.data_files = [self.data_files[i] for i in selected]
         if self.file_lengths is not None:
@@ -117,7 +116,7 @@ class MLMDataset(Dataset):
         return len(self.data_files)
 
     def _tokenize_npz(self, idx):
-        """将 npz 文件编码为 no_pair token 序列 (绝对位置编码)"""
+        """Encode an npz file into a no_pair token sequence (absolute position)."""
         file_path = os.path.join(self.data_dir, self.data_files[idx])
         file_name = self.data_files[idx]
         save_dict = np.load(file_path, allow_pickle=True)
@@ -131,19 +130,19 @@ class MLMDataset(Dataset):
         num_measures = metadata['num_measures']
         is_continuation = metadata.get('is_continuation', False)
 
-        # BOS 判断
+        # Decide whether to add BOS
         add_bos = True
         if '_' in file_name:
             suffix = file_name.split('_')[-1].replace('.npz', '')
             if suffix.isdigit() and suffix != '1':
                 add_bos = False
 
-        # 随机音高偏移
+        # Random pitch shift
         pitch_shift = 0
         if np.random.random() < 0.7:
             pitch_shift = np.random.randint(-5, 6)
 
-        # 处理每个小节
+        # Process each bar
         all_tokens = []
 
         # BOS + TIME_SIG + BPM
@@ -182,7 +181,7 @@ class MLMDataset(Dataset):
                         mode='constant', constant_values=0
                     )
 
-                # Track 0 (高声部) - 使用 TRACK0_START 标记 + 绝对位置
+                # Track 0 (upper voice) - TRACK0_START marker + absolute position
                 p0 = beat_measure[:2]
                 tok0 = self.tokenizer.image_to_patch_tokens(p0, strict_mode=True)
                 comp0 = self.tokenizer.compress_tokens(
@@ -191,7 +190,7 @@ class MLMDataset(Dataset):
                 )
                 all_tokens.extend(comp0.tolist())
 
-                # Track 1 (低声部) - 使用 TRACK1_START 标记 + 绝对位置
+                # Track 1 (lower voice) - TRACK1_START marker + absolute position
                 p1 = beat_measure[2:]
                 tok1 = self.tokenizer.image_to_patch_tokens(p1, strict_mode=True)
                 comp1 = self.tokenizer.compress_tokens(
@@ -207,7 +206,7 @@ class MLMDataset(Dataset):
         return torch.tensor(all_tokens, dtype=torch.long)
 
     def _truncate(self, tokens):
-        """超长截断：随机截取片段"""
+        """Overlength truncation: take a random segment."""
         seq_len = len(tokens)
         if seq_len <= self.max_seq_len:
             return tokens
@@ -222,24 +221,23 @@ class MLMDataset(Dataset):
             return tokens[start:start + self.max_seq_len]
 
     def _apply_mlm_mask(self, tokens):
-        """
-        对 note token 施加 MLM masking
+        """Apply MLM masking on note tokens.
 
-        只 mask note tokens (0-168)，不 mask 控制 token (170+) 和 track marker。
-        包括 patch values (0-80) 和 absolute positions (81-168)。
-        注意: token 169 未使用，也不会出现在序列中。
+        Only note tokens (0-168) are masked; control tokens (170+) and track
+        markers are not. Note tokens cover patch values (0-80) and absolute
+        positions (81-168). Note: token 169 is unused and never appears.
 
         Returns:
-            input_ids: 被 mask 后的序列
-            labels: 原始 token (被 mask 位置) / -100 (未 mask 位置)
+            input_ids: the masked sequence.
+            labels: original token at masked positions, -100 elsewhere.
         """
         input_ids = tokens.clone()
         labels = torch.full_like(tokens, -100)
 
-        # 判断哪些位置是 note token (0-168)
+        # Determine which positions are note tokens (0-168)
         is_note = (tokens >= self.tc.note_token_min) & (tokens <= self.tc.note_token_max)
 
-        # 在 note token 中随机选 15%
+        # Randomly select 15% of the note tokens
         note_indices = torch.where(is_note)[0]
         if len(note_indices) == 0:
             return input_ids, labels
@@ -248,7 +246,7 @@ class MLMDataset(Dataset):
         perm = torch.randperm(len(note_indices))[:num_to_mask]
         mask_indices = note_indices[perm]
 
-        # 记录 labels
+        # Record labels
         labels[mask_indices] = tokens[mask_indices]
 
         # 80% -> [MASK]
@@ -256,7 +254,7 @@ class MLMDataset(Dataset):
         mask_replace = mask_indices[rand < self.bc.mask_replace_prob]
         input_ids[mask_replace] = self.tc.mask_token_id
 
-        # 10% -> 随机 note token
+        # 10% -> random note token
         mask_random = mask_indices[
             (rand >= self.bc.mask_replace_prob) &
             (rand < self.bc.mask_replace_prob + self.bc.mask_random_prob)
@@ -267,7 +265,7 @@ class MLMDataset(Dataset):
         )
         input_ids[mask_random] = random_tokens
 
-        # 剩余 10% 保持不变（labels 已设置，input_ids 不变）
+        # Remaining 10% kept unchanged (labels already set, input_ids untouched)
 
         return input_ids, labels
 
@@ -283,7 +281,7 @@ class MLMDataset(Dataset):
 
 
 class BucketBatchSampler(Sampler):
-    """长度感知的批采样器"""
+    """Length-aware batch sampler."""
 
     def __init__(self, dataset, batch_size=64, bucket_size=200, shuffle=True):
         self.dataset = dataset
@@ -298,7 +296,7 @@ class BucketBatchSampler(Sampler):
             for i in range(0, len(dataset.sorted_indices), bucket_size):
                 self.buckets.append(dataset.sorted_indices[i:i + bucket_size])
 
-        print(f"创建了 {len(self.buckets)} 个长度 buckets")
+        print(f"Created {len(self.buckets)} length buckets")
 
     def __iter__(self):
         if self.shuffle:
@@ -320,7 +318,7 @@ class BucketBatchSampler(Sampler):
 
 
 class MLMCollator:
-    """MLM 数据整理器：动态 padding"""
+    """MLM data collator: dynamic padding."""
 
     def __init__(self, pad_token_id: int, max_length: int):
         self.pad_token_id = pad_token_id

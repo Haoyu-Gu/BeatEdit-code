@@ -1,10 +1,10 @@
 """
-Piano Roll Tokenizer - 钢琴卷帘编解码器
+Piano Roll Tokenizer - piano-roll encoder/decoder.
 
-统一管理piano roll与token之间的编解码逻辑，包括：
-- Patch-based tokenization (三进制编码)
-- 绝对位置压缩编码
-- 双通道piano roll重建
+Centralizes the encode/decode logic between a piano roll and tokens, including:
+- Patch-based tokenization (ternary encoding)
+- Relative-position bundled compression encoding
+- Dual-channel piano-roll reconstruction
 
 Author: Optimized from original implementation
 """
@@ -15,28 +15,29 @@ from typing import Optional, Union
 
 
 class PianoRollTokenizer:
-    """
-    钢琴卷帘(Piano Roll)的Token编解码器
+    """Token encoder/decoder for a piano roll.
 
-    功能：
-    1. 将双通道piano roll (sustain + onset) 转换为patch tokens
-       (三态约定与论文一致: 0=silent, 1=onset, 2=sustain continuation)
-    2. 使用绝对位置编码压缩token序列
-    3. 支持完整的编码-解码循环
+    Responsibilities:
+    1. Convert a dual-channel piano roll (sustain + onset) into patch tokens
+       (ternary convention matches the paper: 0 = silent, 1 = onset,
+       2 = sustain continuation).
+    2. Compress the token sequence using relative-position bundled encoding.
+    3. Support a full encode-decode round-trip.
 
-    参数：
-        patch_h: patch高度（默认2，对应2个音高）
-        patch_w: patch宽度（默认4，对应4个时间步）
-        pattern_num: 相对位置标记的偏移量（默认81）
-        beats_length: 每个beat的pitch数量（默认88键）
-        beats_length: 图像高度，即钢琴键数（默认88）
+    Args:
+        patch_h: patch height (default 2, i.e. 2 pitches).
+        patch_w: patch width (default 4, i.e. 4 time steps).
+        pattern_num: multiplier used when bundling relative position and
+            pattern value into a single token (default 81).
+        beats_length: number of pitches per beat / image height, i.e. the
+            88 piano keys (default 88).
 
-    示例：
+    Example:
         >>> tokenizer = PianoRollTokenizer(patch_h=2, patch_w=4)
-        >>> # 编码
+        >>> # encode
         >>> image = np.random.randint(0, 2, (2, 88, 16))
         >>> compressed = tokenizer.encode(image)
-        >>> # 解码
+        >>> # decode
         >>> reconstructed = tokenizer.decode(compressed, num_beats=4)
     """
 
@@ -56,7 +57,7 @@ class PianoRollTokenizer:
         self.beats_length = beats_length
         self.use_velocities = use_velocities
 
-        # Velocity相关参数
+        # Velocity-related parameters
         if use_velocities:
             if velocity_offset is None:
                 raise ValueError("velocity_offset must be provided when use_velocities=True")
@@ -68,11 +69,11 @@ class PianoRollTokenizer:
             self.velocity_offset = velocity_offset
             self.num_velocities = num_velocities
 
-        # 预计算patch相关参数
+        # Precompute patch-related parameters
         self.patch_size = patch_h * patch_w
         self.powers_3 = 3 ** np.arange(self.patch_size - 1, -1, -1)
 
-        # 特殊token替换规则（用于strict模式）
+        # Special-token replacement rules (used in strict mode)
         self.special_token_ids = [
             26, 24, 34, 62, 47, 19, 29, 38, 74, 60,
             56, 7, 21, 65, 23, 22, 20, 25, 61, 11,
@@ -81,15 +82,13 @@ class PianoRollTokenizer:
         self.replacement_ids = [0, 53, 5, 80, 45]
 
     def quantize_velocity(self, velocity: Union[np.ndarray, int, float]) -> Union[np.ndarray, int]:
-        """
-        将1-127的velocity量化到1-num_velocities范围
+        """Quantize a velocity from 1-127 into the range 1-num_velocities.
 
         Args:
-            velocity: 原始velocity值 (1-127)，可以是标量或数组
+            velocity: original velocity value (1-127), scalar or array.
 
         Returns:
-            量化后的velocity (1-num_velocities)
-            0值保持为0（表示无音符）
+            Quantized velocity (1-num_velocities); 0 stays 0 (no note).
         """
         if self.num_velocities is None:
             raise ValueError("num_velocities not set")
@@ -97,12 +96,12 @@ class PianoRollTokenizer:
         if isinstance(velocity, np.ndarray):
             result = np.zeros_like(velocity, dtype=np.int64)
             non_zero_mask = velocity > 0
-            # 将1-127映射到1-num_velocities
-            # 使用线性量化: q = ceil((v / 127) * num_velocities)
+            # Map 1-127 to 1-num_velocities
+            # Linear quantization: q = ceil((v / 127) * num_velocities)
             result[non_zero_mask] = np.ceil(
                 velocity[non_zero_mask] / 127.0 * self.num_velocities
             ).astype(np.int64)
-            # 确保范围在1-num_velocities
+            # Clamp to the range 1-num_velocities
             result[non_zero_mask] = np.clip(result[non_zero_mask], 1, self.num_velocities)
             return result
         else:
@@ -112,15 +111,13 @@ class PianoRollTokenizer:
             return max(1, min(self.num_velocities, q))
 
     def dequantize_velocity(self, quantized: Union[np.ndarray, int]) -> Union[np.ndarray, int]:
-        """
-        将量化的velocity (1-num_velocities) 还原到1-127范围
+        """Restore a quantized velocity (1-num_velocities) back to 1-127.
 
         Args:
-            quantized: 量化后的velocity (1-num_velocities)
+            quantized: quantized velocity (1-num_velocities).
 
         Returns:
-            还原后的velocity (1-127)
-            0值保持为0（表示无音符）
+            Restored velocity (1-127); 0 stays 0 (no note).
         """
         if self.num_velocities is None:
             raise ValueError("num_velocities not set")
@@ -128,11 +125,11 @@ class PianoRollTokenizer:
         if isinstance(quantized, np.ndarray):
             result = np.zeros_like(quantized, dtype=np.int64)
             non_zero_mask = quantized > 0
-            # 反量化: v = round((q / num_velocities) * 127)
+            # Dequantization: v = round((q / num_velocities) * 127)
             result[non_zero_mask] = np.round(
                 quantized[non_zero_mask] / self.num_velocities * 127.0
             ).astype(np.int64)
-            # 确保范围在1-127
+            # Clamp to the range 1-127
             result[non_zero_mask] = np.clip(result[non_zero_mask], 1, 127)
             return result
         else:
@@ -148,18 +145,17 @@ class PianoRollTokenizer:
         empty_marker_id: int,
         use_strict_mode: bool = True
     ) -> np.ndarray:
-        """
-        完整编码流程：piano roll → compressed tokens (捆绑编码)
+        """Full encoding pipeline: piano roll -> compressed tokens (bundled encoding).
 
         Args:
-            image: shape (2, 88, t) 的双通道piano roll
-                   ch0: sustain, ch1: onset
-            split_marker_id: 声部分隔标记ID
-            empty_marker_id: 空段标记ID
-            use_strict_mode: 是否使用严格模式（替换特殊token）
+            image: dual-channel piano roll of shape (2, 88, t);
+                ch0 = sustain, ch1 = onset.
+            split_marker_id: voice split-marker ID.
+            empty_marker_id: empty-segment marker ID.
+            use_strict_mode: whether to use strict mode (replace special tokens).
 
         Returns:
-            compressed_sequence: 一维压缩token序列
+            compressed_sequence: 1-D compressed token sequence.
         """
         tokens = self.image_to_patch_tokens(image, strict_mode=use_strict_mode)
         compressed = self.compress_tokens(tokens, split_marker_id=split_marker_id, empty_marker_id=empty_marker_id)
@@ -171,59 +167,57 @@ class PianoRollTokenizer:
         split_marker_id: int,
         empty_marker_id: int
     ) -> np.ndarray:
-        """
-        完整解码流程：compressed tokens → piano roll (捆绑编码)
+        """Full decoding pipeline: compressed tokens -> piano roll (bundled encoding).
 
         Args:
-            compressed_sequence: 压缩的token序列
-            split_marker_id: 声部分隔标记ID
-            empty_marker_id: 空段标记ID
+            compressed_sequence: compressed token sequence.
+            split_marker_id: voice split-marker ID.
+            empty_marker_id: empty-segment marker ID.
 
         Returns:
-            image: shape (2, 88, t) 的双通道piano roll
+            image: dual-channel piano roll of shape (2, 88, t).
         """
         tokens = self.decompress_tokens(compressed_sequence, split_marker_id=split_marker_id, empty_marker_id=empty_marker_id)
         image = self.patch_tokens_to_image(tokens)
         return image
 
-    # ==================== 编码相关方法 ====================
+    # ==================== Encoding methods ====================
 
     def image_to_patch_tokens(
         self,
         image: Union[np.ndarray, torch.Tensor],
         strict_mode: bool = True
     ) -> np.ndarray:
-        """
-        将双通道piano roll转换为patch tokens（三进制编码）
+        """Convert a dual-channel piano roll into patch tokens (ternary pattern).
 
         Args:
-            image: shape (2, 88, t) 的双通道piano roll
-                   ch0: sustain, ch1: onset
-            strict_mode: 是否替换特殊token
+            image: dual-channel piano roll of shape (2, 88, t);
+                ch0 = sustain, ch1 = onset.
+            strict_mode: whether to replace special tokens.
 
         Returns:
-            tokens: shape (num_time_patches, num_pitch_patches) 的token矩阵
+            tokens: token matrix of shape (num_time_patches, num_pitch_patches).
 
-        编码规则：
-            0: 无音符 (sustain=0, onset=0)
-            1: onset (sustain=1, onset=1)
-            2: 只有sustain延续 (sustain=1, onset=0)
+        Encoding convention:
+            0 = silent (sustain=0, onset=0)
+            1 = onset (sustain=1, onset=1)
+            2 = sustain continuation (sustain=1, onset=0)
         """
         if isinstance(image, torch.Tensor):
             image = image.cpu().numpy()
 
-        # 确保输入是双通道
+        # Ensure the input has two channels
         assert image.shape[0] == 2, f"Expected 2 channels, got {image.shape[0]}"
 
         sustain_channel = image[0].copy()  # shape: (88, t)
         onset_channel = image[1].copy()    # shape: (88, t)
 
-        # onset只能出现在sustain为1的地方
+        # An onset can only occur where sustain is 1
         onset_channel[sustain_channel == 0] = 0
 
         beats_length, img_w = sustain_channel.shape
 
-        # 处理宽度padding（确保可以整除patch_w）
+        # Pad the width so it is divisible by patch_w
         padding_w = (self.patch_w - img_w % self.patch_w) % self.patch_w
         if padding_w > 0:
             sustain_channel = np.pad(
@@ -243,17 +237,17 @@ class PianoRollTokenizer:
         num_patch_rows = beats_length // self.patch_h
         num_patch_cols = img_w // self.patch_w
 
-        # 重塑为patches
+        # Reshape into patches
         sustain_patches = self._reshape_to_patches(sustain_channel, num_patch_rows, num_patch_cols)
         onset_patches = self._reshape_to_patches(onset_channel, num_patch_rows, num_patch_cols)
 
-        # 组合成三进制编码
+        # Combine into the ternary encoding
         combined_patches = 2 * sustain_patches.astype(np.int64) - onset_patches.astype(np.int64)
 
-        # 使用三进制计算token值
+        # Compute token values in base 3
         tokens = np.dot(combined_patches, self.powers_3)
 
-        # 处理特殊token（strict模式）
+        # Handle special tokens (strict mode)
         if strict_mode:
             tokens = self._replace_special_tokens(tokens)
 
@@ -265,14 +259,14 @@ class PianoRollTokenizer:
         num_patch_rows: int,
         num_patch_cols: int
     ) -> np.ndarray:
-        """将通道重塑为patches"""
+        """Reshape a channel into patches."""
         patches = channel.reshape(num_patch_rows, self.patch_h, num_patch_cols, self.patch_w)
         patches = patches.transpose(2, 0, 1, 3)  # (cols, rows, h, w)
         patches = patches.reshape(num_patch_cols, num_patch_rows, self.patch_size)
         return patches
 
     def _replace_special_tokens(self, tokens: np.ndarray) -> np.ndarray:
-        """随机替换特殊token"""
+        """Randomly replace special tokens."""
         mask = np.isin(tokens, self.special_token_ids)
         if np.any(mask):
             num_replacements = np.sum(mask)
@@ -286,48 +280,49 @@ class PianoRollTokenizer:
         image: Union[np.ndarray, torch.Tensor],
         strict_mode: bool = True
     ) -> np.ndarray:
-        """
-        将双通道piano roll转换为带velocity的patch tokens
+        """Convert a dual-channel piano roll into velocity-aware patch tokens.
 
         Args:
-            image: shape (2, 88, t) 的双通道piano roll
-                   ch0: sustain (0-127 velocity), ch1: onset (0-127 velocity)
-                   velocity值范围为0-127
-            strict_mode: 是否替换特殊token
+            image: dual-channel piano roll of shape (2, 88, t);
+                ch0 = sustain (0-127 velocity), ch1 = onset (0-127 velocity).
+            strict_mode: whether to replace special tokens.
 
         Returns:
-            tokens: shape (2, num_time_patches, num_pitch_patches) 的双通道token矩阵
-                    ch0: 三进制编码的音符pattern
-                    ch1: 量化后的力度信息 (0-num_velocities)，0表示无音符，1-num_velocities表示量化后的velocity
+            tokens: dual-channel token matrix of shape
+                (2, num_time_patches, num_pitch_patches);
+                ch0 = ternary-encoded note pattern,
+                ch1 = quantized velocity (0-num_velocities); 0 = no note,
+                1-num_velocities = quantized velocity.
 
-        编码规则：
+        Encoding convention:
             channel 0 (pattern):
-                0: 无音符 (sustain=0, onset=0)
-                1: onset (sustain>0, onset>0)
-                2: 只有sustain延续 (sustain>0, onset=0)
+                0 = silent (sustain=0, onset=0)
+                1 = onset (sustain>0, onset>0)
+                2 = sustain continuation (sustain>0, onset=0)
             channel 1 (velocity):
-                0: 无音符
-                1-num_velocities: patch内非零值的平均velocity量化后的值
+                0 = no note
+                1-num_velocities = quantized mean velocity of nonzero values
+                in the patch
         """
         if isinstance(image, torch.Tensor):
             image = image.cpu().numpy()
 
-        # 确保输入是双通道
+        # Ensure the input has two channels
         assert image.shape[0] == 2, f"Expected 2 channels, got {image.shape[0]}"
 
         sustain_channel = image[0].copy()  # shape: (88, t), velocity values 0-127
         onset_channel = image[1].copy()    # shape: (88, t), velocity values 0-127
 
-        # onset只能出现在sustain为非零的地方
+        # An onset can only occur where sustain is nonzero
         onset_channel[sustain_channel == 0] = 0
 
-        # 创建二值mask用于pattern编码
+        # Build binary masks for pattern encoding
         sustain_binary = (sustain_channel > 0).astype(np.int64)
         onset_binary = (onset_channel > 0).astype(np.int64)
 
         beats_length, img_w = sustain_channel.shape
 
-        # 处理宽度padding（确保可以整除patch_w）
+        # Pad the width so it is divisible by patch_w
         padding_w = (self.patch_w - img_w % self.patch_w) % self.patch_w
         if padding_w > 0:
             sustain_binary = np.pad(
@@ -353,25 +348,25 @@ class PianoRollTokenizer:
         num_patch_rows = beats_length // self.patch_h
         num_patch_cols = img_w // self.patch_w
 
-        # 重塑为patches (用于pattern编码)
+        # Reshape into patches (for pattern encoding)
         sustain_patches = self._reshape_to_patches(sustain_binary, num_patch_rows, num_patch_cols)
         onset_patches = self._reshape_to_patches(onset_binary, num_patch_rows, num_patch_cols)
 
-        # 组合成三进制编码
+        # Combine into the ternary encoding
         combined_patches = 2 * sustain_patches.astype(np.int64) - onset_patches.astype(np.int64)
 
-        # 使用三进制计算pattern token值
+        # Compute pattern token values in base 3
         pattern_tokens = np.dot(combined_patches, self.powers_3)
 
-        # 处理特殊token（strict模式）
+        # Handle special tokens (strict mode)
         if strict_mode:
             pattern_tokens = self._replace_special_tokens(pattern_tokens)
 
-        # 计算velocity channel
-        # 重塑sustain_channel为patches以计算平均velocity
+        # Compute the velocity channel
+        # Reshape sustain_channel into patches to compute the mean velocity
         sustain_velocity_patches = self._reshape_to_patches(sustain_channel, num_patch_rows, num_patch_cols)
 
-        # 计算每个patch内非零值的平均velocity
+        # Compute the mean velocity of nonzero values within each patch
         velocity_tokens = np.zeros((num_patch_cols, num_patch_rows), dtype=np.int64)
 
         for col in range(num_patch_cols):
@@ -379,14 +374,14 @@ class PianoRollTokenizer:
                 patch_values = sustain_velocity_patches[col, row]  # shape: (patch_size,)
                 non_zero_values = patch_values[patch_values > 0]
                 if len(non_zero_values) > 0:
-                    # 计算平均值并四舍五入
+                    # Compute the mean and round it
                     avg_velocity = np.round(np.mean(non_zero_values)).astype(np.int64)
-                    # 量化velocity到1-num_velocities范围
+                    # Quantize the velocity into the range 1-num_velocities
                     velocity_tokens[col, row] = self.quantize_velocity(avg_velocity)
                 else:
                     velocity_tokens[col, row] = 0
 
-        # 组合成双通道输出: (2, num_time_patches, num_pitch_patches)
+        # Stack into dual-channel output: (2, num_time_patches, num_pitch_patches)
         tokens = np.stack([pattern_tokens, velocity_tokens], axis=0)
 
         return tokens
@@ -397,36 +392,35 @@ class PianoRollTokenizer:
         split_marker_id: int,
         empty_marker_id: int
     ) -> np.ndarray:
-        """
-        使用捆绑编码压缩token序列（相对位置 × pattern_num + patch值）
+        """Compress a token sequence using bundled encoding (relative position x pattern_num + patch value).
 
         Args:
-            token_matrix: shape (num_beats, beats_length) 的token矩阵
-            split_marker_id: 声部分隔标记ID (SPLIT_0 或 SPLIT_1)
-            empty_marker_id: 空段标记ID
+            token_matrix: token matrix of shape (num_beats, beats_length).
+            split_marker_id: voice split-marker ID (SPLIT_0 or SPLIT_1).
+            empty_marker_id: empty-segment marker ID.
 
         Returns:
-            compressed_sequence: 压缩后的一维序列
+            compressed_sequence: compressed 1-D sequence.
 
-        编码格式：
-            非空: [split_marker] [bundled_0] [bundled_1] ...
-                  bundled = relative_position × pattern_num + token_value
-            空:   [empty_marker]
+        Encoding format:
+            non-empty: [split_marker] [bundled_0] [bundled_1] ...
+                       bundled = relative_position * pattern_num + token_value
+            empty:     [empty_marker]
         """
         compressed_sequences = []
 
         for beat_tokens in token_matrix:
-            # 找到所有非零token的位置
+            # Find the positions of all nonzero tokens
             non_zero_indices = np.where(beat_tokens != 0)[0]
 
             if len(non_zero_indices) == 0:
-                # 空beat
+                # Empty beat
                 compressed = [empty_marker_id]
             else:
-                # 非空beat - 先添加分隔标记
+                # Non-empty beat - start with the split marker
                 compressed = [split_marker_id]
 
-                # 使用相对位置捆绑编码
+                # Bundle each note using its relative position
                 prev_pos = 0
                 for idx in non_zero_indices:
                     relative_pos = idx - prev_pos
@@ -437,7 +431,7 @@ class PianoRollTokenizer:
 
             compressed_sequences.append(np.array(compressed, dtype=np.int64))
 
-        # 连接所有beats
+        # Concatenate all beats
         flattened_sequence = np.concatenate(compressed_sequences)
 
         return flattened_sequence
@@ -447,23 +441,22 @@ class PianoRollTokenizer:
         token_matrix: np.ndarray,
         track_marker_id: int
     ) -> np.ndarray:
-        """
-        使用绝对位置编码压缩带velocity的token序列
+        """Compress a velocity-aware token sequence using absolute-position encoding.
 
         Args:
-            token_matrix: shape (2, num_beats, beats_length) 的双通道token矩阵
-                          ch0: pattern tokens
-                          ch1: velocity tokens (0-num_velocities)
-            track_marker_id: track标记ID
+            token_matrix: dual-channel token matrix of shape
+                (2, num_beats, beats_length); ch0 = pattern tokens,
+                ch1 = velocity tokens (0-num_velocities).
+            track_marker_id: track marker ID.
 
         Returns:
-            compressed_sequence: 压缩后的一维序列
+            compressed_sequence: compressed 1-D sequence.
 
-        编码格式：
-            非空: [track_marker] [abs_pos0] [token0] [velocity0+offset] [abs_pos1] [token1] [velocity1+offset] ...
-                  - 每个音符使用绝对位置编码
-                  - velocity值会加上velocity_offset偏移量
-            空:   [track_marker, 0]
+        Encoding format:
+            non-empty: [track_marker] [abs_pos0] [token0] [velocity0+offset] [abs_pos1] [token1] [velocity1+offset] ...
+                       - each note uses an absolute-position token.
+                       - velocity values are shifted by velocity_offset.
+            empty:     [track_marker, 0]
         """
         assert token_matrix.shape[0] == 2, f"Expected 2 channels, got {token_matrix.shape[0]}"
 
@@ -476,19 +469,19 @@ class PianoRollTokenizer:
             beat_tokens = pattern_matrix[beat_idx]
             beat_velocities = velocity_matrix[beat_idx]
 
-            # 找到所有非零token的位置
+            # Find the positions of all nonzero tokens
             non_zero_indices = np.where(beat_tokens != 0)[0]
 
             if len(non_zero_indices) == 0:
-                # 空beat
+                # Empty beat
                 compressed = [track_marker_id, 0]
             else:
-                # 非空beat - 先添加开始标记
+                # Non-empty beat - start with the marker
                 compressed = [track_marker_id]
 
-                # 添加 [绝对位置, token值, velocity值] 三元组
+                # Append [absolute position, token value, velocity value] triples
                 for idx in non_zero_indices:
-                    position_marker = self.pattern_num + idx  # 使用绝对位置
+                    position_marker = self.pattern_num + idx  # absolute position
                     token_value = beat_tokens[idx]
                     velocity_value = beat_velocities[idx] + self.velocity_offset
 
@@ -496,12 +489,12 @@ class PianoRollTokenizer:
 
             compressed_sequences.append(np.array(compressed, dtype=np.int64))
 
-        # 连接所有beats
+        # Concatenate all beats
         flattened_sequence = np.concatenate(compressed_sequences)
 
         return flattened_sequence
 
-    # ==================== 解码相关方法 ====================
+    # ==================== Decoding methods ====================
 
     def decompress_tokens(
         self,
@@ -509,16 +502,15 @@ class PianoRollTokenizer:
         split_marker_id: int,
         empty_marker_id: int
     ) -> np.ndarray:
-        """
-        解压缩捆绑编码的token序列 → token矩阵
+        """Decompress a bundled token sequence -> token matrix.
 
         Args:
-            compressed_sequence: 压缩的token序列
-            split_marker_id: 声部分隔标记ID
-            empty_marker_id: 空段标记ID
+            compressed_sequence: compressed token sequence.
+            split_marker_id: voice split-marker ID.
+            empty_marker_id: empty-segment marker ID.
 
         Returns:
-            decompressed_beats: shape (num_beats, beats_length) 的token矩阵
+            decompressed_beats: token matrix of shape (num_beats, beats_length).
         """
         if isinstance(compressed_sequence, list):
             compressed_sequence = np.array(compressed_sequence, dtype=np.int64)
@@ -530,25 +522,25 @@ class PianoRollTokenizer:
             current_token = compressed_sequence[i]
 
             if current_token == empty_marker_id:
-                # 空beat
+                # Empty beat
                 decompressed_beats.append(np.zeros(self.beats_length, dtype=np.int64))
                 i += 1
 
             elif current_token == split_marker_id:
-                # 非空beat
-                i += 1  # 跳过split_marker
+                # Non-empty beat
+                i += 1  # skip split_marker
                 beat = np.zeros(self.beats_length, dtype=np.int64)
                 current_pos = 0
 
-                # 读取捆绑token，直到遇到特殊标记（>= empty_marker_id）
+                # Read bundled tokens until a special marker (>= empty_marker_id) is reached
                 while i < len(compressed_sequence):
                     next_token = compressed_sequence[i]
 
-                    # 遇到特殊标记则结束当前beat
+                    # A special marker ends the current beat
                     if next_token >= empty_marker_id:
                         break
 
-                    # 解码捆绑token
+                    # Decode the bundled token
                     relative_pos = int(next_token) // self.pattern_num
                     token_value = int(next_token) % self.pattern_num
 
@@ -562,7 +554,7 @@ class PianoRollTokenizer:
                 decompressed_beats.append(beat)
 
             else:
-                i += 1  # 跳过未知token
+                i += 1  # skip unknown token
 
         if len(decompressed_beats) == 0:
             return np.zeros((1, self.beats_length), dtype=np.int64)
@@ -574,18 +566,18 @@ class PianoRollTokenizer:
         compressed_sequence: Union[np.ndarray, list],
         track_marker_id: int
     ) -> np.ndarray:
-        """
-        解压缩带velocity的token序列（绝对位置编码 → 双通道token矩阵）
+        """Decompress a velocity-aware token sequence into a dual-channel token matrix.
 
         Args:
-            compressed_sequence: 压缩的token序列
-                格式: [track_marker] [abs_pos0] [token0] [velocity0+offset] [abs_pos1] [token1] [velocity1+offset] ...
-            track_marker_id: track标记ID
+            compressed_sequence: compressed token sequence, formatted as
+                [track_marker] [abs_pos0] [token0] [velocity0+offset] [abs_pos1] [token1] [velocity1+offset] ...
+            track_marker_id: track marker ID.
 
         Returns:
-            decompressed_beats: shape (2, num_beats, beats_length) 的双通道token矩阵
-                                ch0: pattern tokens
-                                ch1: velocity tokens (0-num_velocities)，已减去velocity_offset
+            decompressed_beats: dual-channel token matrix of shape
+                (2, num_beats, beats_length); ch0 = pattern tokens,
+                ch1 = velocity tokens (0-num_velocities) with velocity_offset
+                already subtracted.
         """
         if isinstance(compressed_sequence, list):
             compressed_sequence = np.array(compressed_sequence, dtype=np.int64)
@@ -597,21 +589,21 @@ class PianoRollTokenizer:
         while i < len(compressed_sequence):
             current_token = compressed_sequence[i]
             if current_token == track_marker_id:
-                # 非空beat - 当前token是开始标记
-                i += 1  # 跳过start_marker
+                # Non-empty beat - the current token is the start marker
+                i += 1  # skip start_marker
                 pattern_beat = np.zeros(self.beats_length, dtype=np.int64)
                 velocity_beat = np.zeros(self.beats_length, dtype=np.int64)
 
-                # 读取位置-token-velocity三元组，直到遇到下一个beat的开始
+                # Read position-token-velocity triples until the next beat starts
                 while i < len(compressed_sequence):
                     position_marker = compressed_sequence[i]
 
                     if position_marker == 0:
-                        # 空beat的结束标记
+                        # End marker of an empty beat
                         i += 1
                         break
 
-                    # 检查是否是下一个beat的开始
+                    # Check whether this is the start of the next beat
                     if position_marker == track_marker_id:
                         break
 
@@ -620,21 +612,21 @@ class PianoRollTokenizer:
                     if i >= len(compressed_sequence):
                         break
 
-                    # 读取token值
+                    # Read the token value
                     token_value = compressed_sequence[i]
                     i += 1
 
                     if i >= len(compressed_sequence):
                         break
 
-                    # 读取velocity值
+                    # Read the velocity value
                     velocity_value = compressed_sequence[i]
                     i += 1
 
-                    # 直接计算绝对位置
+                    # Compute the absolute position directly
                     abs_pos = position_marker - self.pattern_num
 
-                    # 填充token和velocity（减去offset还原原始velocity token）
+                    # Fill in token and velocity (subtract offset to restore the raw velocity token)
                     if 0 <= abs_pos < self.beats_length:
                         pattern_beat[abs_pos] = token_value
                         velocity_beat[abs_pos] = velocity_value - self.velocity_offset
@@ -645,7 +637,7 @@ class PianoRollTokenizer:
         pattern_sequence = np.stack(decompressed_pattern_beats, axis=0)
         velocity_sequence = np.stack(decompressed_velocity_beats, axis=0)
 
-        # 组合成双通道输出: (2, num_beats, beats_length)
+        # Stack into dual-channel output: (2, num_beats, beats_length)
         decompressed_sequence = np.stack([pattern_sequence, velocity_sequence], axis=0)
 
         return decompressed_sequence
@@ -654,19 +646,18 @@ class PianoRollTokenizer:
         self,
         tokens: np.ndarray
     ) -> np.ndarray:
-        """
-        从tokens重建双通道piano roll
+        """Reconstruct a dual-channel piano roll from tokens.
 
         Args:
-            tokens: shape (num_time_patches, num_pitch_patches) 的token矩阵
+            tokens: token matrix of shape (num_time_patches, num_pitch_patches).
 
         Returns:
-            image: shape (2, 88, t) 的双通道piano roll
-                   ch0: sustain, ch1: onset
+            image: dual-channel piano roll of shape (2, 88, t);
+                ch0 = sustain, ch1 = onset.
         """
         num_patch_cols, num_patch_rows = tokens.shape
 
-        # 解码tokens为三进制表示
+        # Decode tokens into their base-3 representation
         combined_patches = np.zeros(
             (num_patch_cols, num_patch_rows, self.patch_size),
             dtype=np.int64
@@ -677,14 +668,14 @@ class PianoRollTokenizer:
             combined_patches[:, :, i] = temp_tokens // self.powers_3[i]
             temp_tokens = temp_tokens % self.powers_3[i]
 
-        # 从三进制值恢复双通道
+        # Recover the two channels from the ternary values
         # 0 -> sustain=0, onset=0
         # 1 -> onset (sustain=1, onset=1)
-        # 2 -> sustain延续 (sustain=1, onset=0)
+        # 2 -> sustain continuation (sustain=1, onset=0)
         sustain_patches = (combined_patches >= 1).astype(np.float32)
         onset_patches = (combined_patches == 1).astype(np.float32)
 
-        # 重建图像
+        # Rebuild the image
         sustain_channel = self._patches_to_channel(
             sustain_patches,
             num_patch_cols,
@@ -696,7 +687,7 @@ class PianoRollTokenizer:
             num_patch_rows
         )
 
-        # 组合成双通道
+        # Stack into two channels
         image = np.stack([sustain_channel, onset_channel], axis=0)
         return image
 
@@ -704,18 +695,18 @@ class PianoRollTokenizer:
         self,
         tokens: np.ndarray
     ) -> np.ndarray:
-        """
-        从带velocity的tokens重建双通道piano roll
+        """Reconstruct a dual-channel piano roll from velocity-aware tokens.
 
         Args:
-            tokens: shape (2, num_time_patches, num_pitch_patches) 的双通道token矩阵
-                    ch0: 三进制编码的音符pattern
-                    ch1: 量化后的力度信息 (0-num_velocities)
+            tokens: dual-channel token matrix of shape
+                (2, num_time_patches, num_pitch_patches);
+                ch0 = ternary-encoded note pattern,
+                ch1 = quantized velocity (0-num_velocities).
 
         Returns:
-            image: shape (2, 88, t) 的双通道piano roll
-                   ch0: sustain (velocity值), ch1: onset (velocity值)
-                   velocity值范围为0-127（经过反量化）
+            image: dual-channel piano roll of shape (2, 88, t);
+                ch0 = sustain (velocity), ch1 = onset (velocity);
+                velocity values are 0-127 (dequantized).
         """
         assert tokens.shape[0] == 2, f"Expected 2 channels, got {tokens.shape[0]}"
 
@@ -724,7 +715,7 @@ class PianoRollTokenizer:
 
         num_patch_cols, num_patch_rows = pattern_tokens.shape
 
-        # 解码pattern tokens为三进制表示
+        # Decode pattern tokens into their base-3 representation
         combined_patches = np.zeros(
             (num_patch_cols, num_patch_rows, self.patch_size),
             dtype=np.int64
@@ -735,30 +726,30 @@ class PianoRollTokenizer:
             combined_patches[:, :, i] = temp_tokens // self.powers_3[i]
             temp_tokens = temp_tokens % self.powers_3[i]
 
-        # 从三进制值恢复双通道的二值mask
+        # Recover the binary masks of both channels from the ternary values
         # 0 -> sustain=0, onset=0
         # 1 -> onset (sustain=1, onset=1)
-        # 2 -> sustain延续 (sustain=1, onset=0)
+        # 2 -> sustain continuation (sustain=1, onset=0)
         sustain_mask = (combined_patches >= 1).astype(np.float32)
         onset_mask = (combined_patches == 1).astype(np.float32)
 
-        # 反量化velocity: 从1-num_velocities还原到1-127
+        # Dequantize velocity: restore from 1-num_velocities back to 1-127
         dequantized_velocity = self.dequantize_velocity(velocity_tokens)
 
-        # 将velocity应用到每个patch
+        # Apply the velocity to each patch
         # dequantized_velocity shape: (num_patch_cols, num_patch_rows)
-        # 需要扩展到 (num_patch_cols, num_patch_rows, patch_size)
+        # Expand to (num_patch_cols, num_patch_rows, patch_size)
         velocity_expanded = np.repeat(
             dequantized_velocity[:, :, np.newaxis],
             self.patch_size,
             axis=2
         ).astype(np.float32)
 
-        # 应用velocity到sustain和onset mask
+        # Apply velocity to the sustain and onset masks
         sustain_patches = sustain_mask * velocity_expanded
         onset_patches = onset_mask * velocity_expanded
 
-        # 重建图像
+        # Rebuild the image
         sustain_channel = self._patches_to_channel(
             sustain_patches,
             num_patch_cols,
@@ -770,7 +761,7 @@ class PianoRollTokenizer:
             num_patch_rows
         )
 
-        # 组合成双通道
+        # Stack into two channels
         image = np.stack([sustain_channel, onset_channel], axis=0)
         return image
 
@@ -780,16 +771,16 @@ class PianoRollTokenizer:
         num_patch_cols: int,
         num_patch_rows: int
     ) -> np.ndarray:
-        """将patches重建为通道"""
+        """Rebuild a channel from patches."""
         patches = patches.reshape(num_patch_cols, num_patch_rows, self.patch_h, self.patch_w)
         patches = patches.transpose(1, 2, 0, 3)  # (rows, h, cols, w)
         channel = patches.reshape(self.beats_length, num_patch_cols * self.patch_w)
         return channel
 
-    # ==================== 工具方法 ====================
+    # ==================== Utility methods ====================
 
     def get_config(self) -> dict:
-        """返回配置字典"""
+        """Return the configuration as a dict."""
         return {
             'patch_h': self.patch_h,
             'patch_w': self.patch_w,

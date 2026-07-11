@@ -2,7 +2,7 @@
 Training script for Levenshtein Transformer Music Inpainting.
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0,1 conda run --no-capture-output -n musictoken \
+    CUDA_VISIBLE_DEVICES=0,1 \
         python -u -m accelerate.commands.launch \
         --num_processes=2 --mixed_precision=fp16 \
         training/train.py --epochs 30 --batch_size 32 --gradient_accumulation 2

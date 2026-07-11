@@ -1,7 +1,7 @@
 """
-Music BERT MLM 预训练脚本 (with_pair 编码方案)
+Music BERT MLM pretraining script (with_pair encoding scheme).
 
-使用 HuggingFace BertForMaskedLM + Accelerate 进行分布式训练。
+Uses HuggingFace BertForMaskedLM + Accelerate for distributed training.
 """
 import os
 import sys
@@ -27,7 +27,7 @@ def count_parameters(model):
 
 
 def build_model(token_config: MusicTokenConfig, bert_config: BertPretrainConfig):
-    """构建 BertForMaskedLM 模型"""
+    """Build the BertForMaskedLM model."""
     config = BertConfig(
         vocab_size=token_config.vocab_size,
         hidden_size=bert_config.hidden_size,
@@ -38,7 +38,7 @@ def build_model(token_config: MusicTokenConfig, bert_config: BertPretrainConfig)
         hidden_dropout_prob=bert_config.hidden_dropout_prob,
         attention_probs_dropout_prob=bert_config.attention_probs_dropout_prob,
         pad_token_id=token_config.pad_token_id,
-        type_vocab_size=1,  # 不需要 segment embedding
+        type_vocab_size=1,  # no segment embedding needed
     )
     model = BertForMaskedLM(config)
     return model
@@ -55,7 +55,7 @@ def train():
     parser.add_argument('--tb_log_dir', type=str, default=None, help='tensorboard log directory')
     args = parser.parse_args()
 
-    # 配置
+    # Configuration
     token_config = MusicTokenConfig()
     bert_config = BertPretrainConfig()
 
@@ -99,7 +99,7 @@ def train():
         print(f"Output: {bert_config.output_dir}")
         print("=" * 60)
 
-    # 数据集
+    # Datasets
     train_dataset = MLMDataset(
         data_dir=bert_config.data_dir,
         token_config=token_config,
@@ -152,14 +152,14 @@ def train():
         pin_memory=True,
     )
 
-    # 模型
+    # Model
     model = build_model(token_config, bert_config)
 
     total_params, trainable_params = count_parameters(model)
     if accelerator.is_main_process:
-        print(f"模型参数: {total_params:,} total, {trainable_params:,} trainable")
+        print(f"Model parameters: {total_params:,} total, {trainable_params:,} trainable")
 
-    # 优化器
+    # Optimizer
     no_decay = ['bias', 'LayerNorm.weight', 'LayerNorm.bias']
     optimizer_grouped_parameters = [
         {
@@ -178,7 +178,7 @@ def train():
         eps=1e-8,
     )
 
-    # 学习率调度
+    # Learning-rate schedule
     num_update_steps_per_epoch = len(train_loader) // bert_config.gradient_accumulation_steps
     total_training_steps = num_update_steps_per_epoch * bert_config.num_epochs
     warmup_steps = int(total_training_steps * bert_config.warmup_ratio)
@@ -202,7 +202,7 @@ def train():
     global_step = 0
     if args.resume and os.path.exists(args.resume):
         accelerator.load_state(args.resume)
-        # 从 checkpoint 目录名解析 step
+        # Parse the step from the checkpoint directory name
         ckpt_name = os.path.basename(args.resume)
         if 'step_' in ckpt_name:
             global_step = int(ckpt_name.split('step_')[1])
@@ -210,9 +210,9 @@ def train():
         if accelerator.is_main_process:
             print(f"Resumed from {args.resume}, step={global_step}, epoch={start_epoch}")
 
-    # 训练循环
+    # Training loop
     if accelerator.is_main_process:
-        print("\n开始训练...")
+        print("\nStarting training...")
 
     best_eval_loss = float('inf')
 
@@ -241,7 +241,7 @@ def train():
                 scheduler.step()
                 optimizer.zero_grad()
 
-            # 统计
+            # Statistics
             batch_masked = (batch['labels'] != -100).sum().item()
             epoch_loss += loss.item() * batch_masked
             epoch_tokens += batch_masked
@@ -250,7 +250,7 @@ def train():
             if accelerator.sync_gradients:
                 global_step += 1
 
-                # 日志
+                # Logging
                 if global_step % bert_config.log_every_n_steps == 0 and accelerator.is_main_process:
                     avg_loss = epoch_loss / max(epoch_tokens, 1)
                     lr = scheduler.get_last_lr()[0]
@@ -271,7 +271,7 @@ def train():
                         tb_writer.add_scalar('train/lr', lr, global_step)
                         tb_writer.add_scalar('train/tokens_per_sec', tokens_per_sec, global_step)
 
-                # 评估
+                # Evaluation
                 if global_step % bert_config.eval_every_n_steps == 0:
                     eval_loss = evaluate(model, eval_loader, accelerator)
                     if accelerator.is_main_process:
@@ -288,41 +288,41 @@ def train():
                             best_eval_loss = eval_loss
                             save_path = os.path.join(bert_config.output_dir, 'best_model')
                             accelerator.save_state(save_path)
-                            print(f"  [Best] 保存至 {save_path}")
+                            print(f"  [Best] saved to {save_path}")
                     model.train()
 
-                # 定期保存
+                # Periodic saving
                 if global_step % bert_config.save_every_n_steps == 0 and accelerator.is_main_process:
                     save_path = os.path.join(bert_config.output_dir, f'step_{global_step}')
                     accelerator.save_state(save_path)
                     print(f"  [Save] {save_path}")
 
-        # Epoch 结束
+        # End of epoch
         if accelerator.is_main_process:
             avg_loss = epoch_loss / max(epoch_tokens, 1)
             elapsed = time.time() - t0
             print(
-                f"\n--- Epoch {epoch+1} 完成 | "
+                f"\n--- Epoch {epoch+1} done | "
                 f"Avg Loss {avg_loss:.4f} | "
                 f"PPL {math.exp(min(avg_loss, 10)):.2f} | "
-                f"用时 {elapsed/60:.1f} min ---\n"
+                f"Time {elapsed/60:.1f} min ---\n"
             )
             if tb_writer:
                 tb_writer.add_scalar('epoch/train_loss', avg_loss, epoch + 1)
 
-    # 最终保存
+    # Final save
     if accelerator.is_main_process:
         save_path = os.path.join(bert_config.output_dir, 'final_model')
         accelerator.save_state(save_path)
-        print(f"训练完成！最终模型保存至 {save_path}")
-        print(f"最佳 eval loss: {best_eval_loss:.4f}")
+        print(f"Training complete! Final model saved to {save_path}")
+        print(f"Best eval loss: {best_eval_loss:.4f}")
         if tb_writer:
             tb_writer.close()
 
 
 @torch.no_grad()
 def evaluate(model, eval_loader, accelerator, max_batches=50):
-    """在测试集上评估 MLM loss"""
+    """Evaluate MLM loss on the test set."""
     model.eval()
     total_loss = 0.0
     total_tokens = 0

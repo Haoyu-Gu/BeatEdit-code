@@ -11,8 +11,7 @@ Measures inference speed, GPU memory, tokens/second, and FLOPs for:
 6. Discrete Diffusion (Scheme D) - SDEdit denoising (r03/r05/r07)
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n musictoken python -u \
-        Advanced_Experiments/benchmark_speed.py
+    python evaluation/benchmark_speed.py
 """
 
 import os
@@ -275,7 +274,7 @@ def benchmark_levt():
     from scheme_utils import SchemeLoader
 
     # Import LevT-specific modules
-    sys.path.insert(0, os.path.join(PREVIOUS_DIR, 'unified_eval'))
+    sys.path.insert(0, os.path.join(PREVIOUS_DIR, 'evaluation'))
 
     # Use run_levt functions
     from run_levt import load_levt_pipeline, run_editing_sample

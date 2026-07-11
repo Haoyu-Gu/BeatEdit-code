@@ -174,7 +174,7 @@ TRAINING_DEFAULTS = {
     'clean_ratio': 0.25,
 
     # Inference
-    'max_iterations': 2,          # with_pair 需要更少迭代
+    'max_iterations': 2,          # with_pair needs fewer iterations
     'keep_confidence_bias': 0.3,
     'error_threshold': 0.5,
 }

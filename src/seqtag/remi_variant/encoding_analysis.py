@@ -14,7 +14,7 @@ Metrics:
 Output: results/baselines/beat_vs_remi_analysis.json + markdown tables
 
 Usage:
-    conda run -n musictoken python encoding_analysis.py
+    python encoding_analysis.py
 """
 
 import os

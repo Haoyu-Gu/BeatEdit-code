@@ -2,7 +2,7 @@
 FELIX-Music Tagger Training Script.
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0,1 conda run -n musictoken accelerate launch \
+    CUDA_VISIBLE_DEVICES=0,1 accelerate launch \
         --num_processes=2 --mixed_precision=fp16 \
         training/train_tagger.py --epochs 30 --batch_size 32 --gradient_accumulation 3
 

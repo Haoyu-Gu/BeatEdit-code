@@ -5,10 +5,10 @@ Summarize evaluation results into paper-ready tables.
 Reads results/{task}_*_{scope}.json -> generates Markdown tables for the paper.
 
 Usage:
-    conda run --no-capture-output -n musictoken python -u \
-        unified_eval/summarize.py --task editing
-        unified_eval/summarize.py --task correction
-        unified_eval/summarize.py --task inpainting
+    python \
+        evaluation/summarize.py --task editing
+        evaluation/summarize.py --task correction
+        evaluation/summarize.py --task inpainting
 """
 
 import os
@@ -331,7 +331,7 @@ def main():
     # Generate tables
     output_lines = [
         f"# Unified Evaluation Summary — {args.task} ({args.scope})\n",
-        f"Generated from unified_eval framework.\n",
+        f"Generated from evaluation framework.\n",
     ]
 
     # Main table with key metrics

@@ -1,7 +1,7 @@
 """
 Dataset for Levenshtein Transformer Editing Training.
 
-Uses SchemeLoader (from unified_eval) for scheme-specific tokenization,
+Uses SchemeLoader (from evaluation) for scheme-specific tokenization,
 parsing, perturbation, and sequence rebuilding.
 
 Flow per sample:
@@ -27,7 +27,7 @@ from torch.utils.data import Dataset, Sampler
 # LevT project root
 LEVT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PREVIOUS_DIR = os.path.dirname(LEVT_DIR)
-UNIFIED_DIR = os.path.join(PREVIOUS_DIR, 'unified_eval')
+UNIFIED_DIR = os.path.join(PREVIOUS_DIR, 'evaluation')
 sys.path.insert(0, LEVT_DIR)
 sys.path.insert(0, UNIFIED_DIR)
 

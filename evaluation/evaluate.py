@@ -11,23 +11,23 @@ Outputs:
     results/{task}_all_results_{scope}.json  (combined)
 
 Usage:
-    CUDA_VISIBLE_DEVICES=0 conda run --no-capture-output -n musictoken python -u \
-        unified_eval/evaluate.py --task editing --schemes A,B,C,D --methods gector,felix,no_edit,copy_ctx,cmlm
+    CUDA_VISIBLE_DEVICES=0 python \
+        evaluation/evaluate.py --task editing --schemes A,B,C,D --methods gector,felix,no_edit,copy_ctx,cmlm
 
     # Different tasks:
-    unified_eval/evaluate.py --task correction
-    unified_eval/evaluate.py --task inpainting
+    evaluation/evaluate.py --task correction
+    evaluation/evaluate.py --task inpainting
 
     # Perturbed-only scope (default, paper main table):
-    unified_eval/evaluate.py --scope perturbed_only
+    evaluation/evaluate.py --scope perturbed_only
 
     # Full sequence scope (appendix):
-    unified_eval/evaluate.py --scope full_sequence
+    evaluation/evaluate.py --scope full_sequence
 
     # Include LevT variants:
-    unified_eval/evaluate.py --task inpainting --methods levt_inpainting --schemes A,B,C,D
-    unified_eval/evaluate.py --task editing --methods levt_editing --schemes C,D
-    unified_eval/evaluate.py --task inpainting --methods levt_track_aware --schemes D
+    evaluation/evaluate.py --task inpainting --methods levt_inpainting --schemes A,B,C,D
+    evaluation/evaluate.py --task editing --methods levt_editing --schemes C,D
+    evaluation/evaluate.py --task inpainting --methods levt_track_aware --schemes D
 """
 
 import os

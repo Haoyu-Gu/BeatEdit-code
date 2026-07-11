@@ -2,7 +2,7 @@
 FELIX-Music Inserter Training Script.
 
 Usage:
-    CUDA_VISIBLE_DEVICES=2,3 conda run -n musictoken accelerate launch \
+    CUDA_VISIBLE_DEVICES=2,3 accelerate launch \
         --main_process_port=29501 --num_processes=2 --mixed_precision=fp16 \
         training/train_inserter.py --epochs 30 --batch_size 32 --gradient_accumulation 3
 

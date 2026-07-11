@@ -12,7 +12,7 @@ Computes objective and music quality metrics on test data:
 
 Usage:
     cd /path/to/LevT_inpainting
-    conda run -n musictoken python evaluation/evaluate.py \
+    python evaluation/evaluate.py \
         --checkpoint checkpoints/best.pt --n_samples 100
 """
 

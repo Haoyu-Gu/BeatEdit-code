@@ -6,8 +6,8 @@ Uses per-sample decoded beat_exact from reeval_decoded_beat_exact.py output,
 NOT the token-space beat_exact_match from evaluate.py.
 
 Usage:
-    conda run --no-capture-output -n musictoken python -u \
-        unified_eval/pairwise_bootstrap_decoded.py
+    python \
+        evaluation/pairwise_bootstrap_decoded.py
 """
 
 import os

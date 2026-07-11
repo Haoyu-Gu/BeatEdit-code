@@ -3,8 +3,8 @@
 Two-way ANOVA (Method × Encoding) + pairwise comparisons.
 
 Usage:
-    conda run --no-capture-output -n musictoken python -u \
-        unified_eval/anova_and_pairwise.py --task correction
+    python \
+        evaluation/anova_and_pairwise.py --task correction
 """
 
 import os

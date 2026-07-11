@@ -9,7 +9,7 @@ This makes the metric cross-scheme comparable since all schemes decode to
 the same (pitch, value) space.
 
 Usage:
-    conda run --no-capture-output -n musictoken python -u unified_eval/reeval_decoded_beat_exact.py
+    python evaluation/reeval_decoded_beat_exact.py
 """
 
 import os

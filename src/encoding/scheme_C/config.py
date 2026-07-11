@@ -4,22 +4,22 @@ from typing import Literal
 
 @dataclass
 class TrainingConfig:
-    """训练配置类"""
-    # 基础配置
+    """Training configuration."""
+    # Basic configuration
     time = datetime.now().strftime("%m%d_%H%M")
     output_dir: str = "./checkpoints"
     num_epochs: int = 3
     save_model_epochs: int = 1
     train_batch_size = 2
-    use_length_aware_batching = True  # 是否使用长度感知batching
+    use_length_aware_batching = True  # whether to use length-aware batching
     gradient_accumulation_steps: int = 32
     lr_warmup_steps: int = 50
     mixed_precision: Literal["no", "fp16", "bf16"] = "fp16"
 
-    # 学习率配置
+    # Learning-rate configuration
     learning_rate: float = 5e-5
 
-    # 日志配置
+    # Logging configuration
     log: bool = True
     log_every_n_steps: int = 20
     tensorboard_log_dir: str = "/path/to/logs/encoding"
@@ -27,18 +27,18 @@ class TrainingConfig:
     data_dir = "/path/to/data/npz"
     save_steps = 60000
 
-    # 测试集配置
-    use_test_set: bool = True  # 是否使用测试集
-    test_split_ratio: float = 0.10  # 测试集划分比例（5%作为测试集）
-    test_frequency: float = 0.20  # 测试频率（每0.25个epoch测试一次）
-    test_batch_size: int = 1  # 测试时的batch size
-    test_save_results: bool = True  # 是否保存测试结果到tensorboard
-    random_seed: int = 42  # 数据集划分的随机种子
+    # Test-set configuration
+    use_test_set: bool = True  # whether to use a test set
+    test_split_ratio: float = 0.10  # test-set fraction
+    test_frequency: float = 0.20  # test frequency (fraction of an epoch between test runs)
+    test_batch_size: int = 1  # batch size used during testing
+    test_save_results: bool = True  # whether to log test results to tensorboard
+    random_seed: int = 42  # random seed for the dataset split
 
     
 @dataclass
 class ModelConfig:
-    """模型架构配置
+    """Model architecture configuration.
 
     NOTE (release): only the token-protocol fields of this class (patch_h,
     patch_w, pattern_num, beats_length, vocab/marker ids, train_cutoff_len)
@@ -48,30 +48,30 @@ class ModelConfig:
     backbone -- the paper's Music BERT config lives in
     src/pretraining/scheme_*/config.py (512 hidden / 8 layers / 8 heads).
     """
-    # model 配置  
+    # Model configuration
     hidden_size: int = 768  #
     num_hidden_layers: int = 16
     num_attention_heads: int = 6
     intermediate_size: int = 3072
     max_position_embeddings: int = 3000
-    train_cutoff_len = 2048  # 训练时的截断长度
+    train_cutoff_len = 2048  # truncation length during training
     min_length = -1
     rope_theta: float = 10000.0  # RoPE base
     dropout = 0.1
 
-    # 捆绑编码 (Bundled Encoding)
-    # bundled_token = relative_position × 81 + token_value, 范围 0~7127
+    # Bundled Encoding
+    # bundled_token = relative_position x 81 + token_value, range 0-7127
     vocab_size: int = 7144
-    patch_h = 1  # 音高方向的patch大小
-    patch_w = 4  # 时间方向的patch大小
+    patch_h = 1  # patch size along the pitch axis
+    patch_w = 4  # patch size along the time axis
 
-    pattern_num = 81   # 三进制 patch token 种类数 (3^4)
-    beats_length = 88  # 钢琴键数（88键）
+    pattern_num = 81   # number of ternary patch-token patterns (3^4)
+    beats_length = 88  # number of piano keys (88)
 
-    # 特殊 token
-    empty_marker_id: int = 7128   # 空段标记（该拍该声部无音符）
-    split_0_id: int = 7129        # 高声部分隔标记
-    split_1_id: int = 7130        # 低声部分隔标记
+    # Special tokens
+    empty_marker_id: int = 7128   # empty-segment marker (no notes in this beat/voice)
+    split_0_id: int = 7129        # upper-voice split marker
+    split_1_id: int = 7130        # lower-voice split marker
     bar_token_id: int = 7131
     eos_token_id: int = 7132
     bos_token_id: int = 7133

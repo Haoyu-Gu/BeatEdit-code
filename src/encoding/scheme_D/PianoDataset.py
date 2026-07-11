@@ -1,4 +1,4 @@
-# dataset.py - 修改后的完整代码
+# dataset.py - full code
 
 import os
 import numpy as np
@@ -16,27 +16,27 @@ def encode_bpm(bpm):
             return 3  # UNK token
         bpm = int(bpm)
         if bpm < 90:
-            return 0  # 慢速
+            return 0  # slow
         elif bpm <= 200:
-            return 1  # 中速
+            return 1  # medium
         else:
-            return 2  # 快速
-        
+            return 2  # fast
+
 
 
 class PianoDataset(Dataset):
-    """支持长度感知的数据集"""
+    """Length-aware dataset."""
 
     def __init__(self, data_dir, config, cache_lengths=True, mode='train',
                  test_split_ratio=0.05, random_seed=42):
         """
         Args:
-            data_dir: 数据目录
-            config: 模型配置
-            cache_lengths: 是否使用长度缓存
-            mode: 'train' 或 'test'，决定使用训练集还是测试集
-            test_split_ratio: 测试集划分比例（0-1之间）
-            random_seed: 随机种子，用于可重复的数据集划分
+            data_dir: data directory.
+            config: model configuration.
+            cache_lengths: whether to use the length cache.
+            mode: 'train' or 'test', selecting the training or test split.
+            test_split_ratio: test-set fraction (between 0 and 1).
+            random_seed: random seed for a reproducible split.
         """
         self.root_dir = data_dir
 
@@ -62,7 +62,7 @@ class PianoDataset(Dataset):
 
         self.config = config
 
-        # 创建tokenizer实例
+        # Create the tokenizer instance
         self.tokenizer = PianoRollTokenizer(
             patch_h=self.patch_h,
             patch_w=self.patch_w,
@@ -71,62 +71,62 @@ class PianoDataset(Dataset):
         )
 
         self.data_files = [f for f in os.listdir(self.root_dir) if f.endswith('.npz')]
-        print(f"找到 {len(self.data_files)} 个有效的npz文件")
+        print(f"Found {len(self.data_files)} valid npz files")
 
-        # 预计算长度信息
+        # Precompute length information
         cache_file = os.path.join(data_dir, '.lengths_cache.pkl')
 
         if cache_lengths and os.path.exists(cache_file):
-            print("加载长度缓存...")
+            print("Loading length cache...")
             with open(cache_file, 'rb') as f:
                 cache_data = pickle.load(f)
-                
-            # 验证patch参数是否匹配
-            if (cache_data['patch_h'] != self.patch_h or 
+
+            # Verify that the patch parameters match
+            if (cache_data['patch_h'] != self.patch_h or
                 cache_data['patch_w'] != self.patch_w):
                 raise ValueError(
-                    f"缓存的patch参数({cache_data['patch_h']}x{cache_data['patch_w']}) "
-                    f"与配置({self.patch_h}x{self.patch_w})不匹配，请重新运行precompute_lengths.py"
+                    f"Cached patch parameters ({cache_data['patch_h']}x{cache_data['patch_w']}) "
+                    f"do not match the config ({self.patch_h}x{self.patch_w}); please re-run precompute_lengths.py"
                 )
-            
+
             self.data_files = cache_data['data_files']
             self.file_lengths = cache_data['lengths']
             self.sorted_indices = cache_data['sorted_indices']
-            
-            print(f"加载 {len(self.data_files)} 个文件的长度信息")
-            
+
+            print(f"Loaded length information for {len(self.data_files)} files")
+
         elif cache_lengths:
             raise FileNotFoundError(
-                f"长度缓存不存在: {cache_file}\n"
-                f"请先运行: python precompute_lengths.py"
+                f"Length cache not found: {cache_file}\n"
+                f"Please run first: python precompute_lengths.py"
             )
         else:
-            # 不使用缓存，传统方式
+            # No cache, traditional path
             self.file_lengths = None
             self.sorted_indices = None
-            print(f"找到 {len(self.data_files)} 个文件（未使用长度缓存）")
+            print(f"Found {len(self.data_files)} files (length cache not used)")
 
-        # 划分训练集和测试集
+        # Split into train and test
         self._split_train_test()
 
     def _split_train_test(self):
-        """根据mode参数划分训练集和测试集"""
+        """Split into train and test according to the mode argument."""
         total_files = len(self.data_files)
 
-        # 设置随机种子以确保可重复性
+        # Set the random seed for reproducibility
         rng = np.random.RandomState(self.random_seed)
-    
-        # 创建索引数组并打乱
+
+        # Create an index array and shuffle it
         indices = np.arange(total_files)
-        rng.shuffle(indices)  # 只影响这里的shuffle
+        rng.shuffle(indices)  # only affects the shuffle here
 
 
-        # 计算测试集大小
+        # Compute the test-set size
         test_size = int(total_files * self.test_split_ratio)
         train_size = total_files - test_size
 
         if self.config.min_length > 0:
-            # 根据长度过滤样本
+            # Filter samples by length
             filtered_indices = []
             for i in indices:
                 length = self.file_lengths[i]
@@ -136,35 +136,35 @@ class PianoDataset(Dataset):
             total_files = len(indices)
             test_size = int(total_files * self.test_split_ratio)
             train_size = total_files - test_size
-            print(f"过滤后剩余 {total_files} 个文件")
+            print(f"{total_files} files remaining after filtering")
 
         if self.mode == 'train':
-            # 使用前train_size个样本作为训练集
+            # Use the first train_size samples as the training set
             selected_indices = indices[:train_size]
-            print(f"使用训练集: {len(selected_indices)} 个文件 ({train_size}/{total_files})")
+            print(f"Using training set: {len(selected_indices)} files ({train_size}/{total_files})")
         elif self.mode == 'test':
-            # 使用后test_size个样本作为测试集
+            # Use the last test_size samples as the test set
             selected_indices = indices[train_size:]
-            print(f"使用测试集: {len(selected_indices)} 个文件 ({test_size}/{total_files})")
+            print(f"Using test set: {len(selected_indices)} files ({test_size}/{total_files})")
         elif self.mode == 'all':
-            # 使用全部数据
+            # Use all data
             selected_indices = indices
-            print(f"使用全部数据: {len(selected_indices)} 个文件 ({total_files}/{total_files})")
+            print(f"Using all data: {len(selected_indices)} files ({total_files}/{total_files})")
         elif self.mode == 'toy':
-            # 使用全部数据
+            # Use a small subset
             selected_indices = indices[:4000]
-            print(f"使用验证数据: {len(selected_indices)} 个文件 ({4000}/{total_files})")
+            print(f"Using validation data: {len(selected_indices)} files ({4000}/{total_files})")
         else:
-            raise ValueError(f"mode必须是'train'或'test'或'all'，当前为: {self.mode}")
+            raise ValueError(f"mode must be 'train', 'test', or 'all'; got: {self.mode}")
 
-        # 更新data_files和相关索引
+        # Update data_files and the related indices
         self.data_files = [self.data_files[i] for i in selected_indices]
 
-        # 如果使用了长度缓存，也需要更新相关信息
+        # If the length cache was used, update the related info too
         if self.file_lengths is not None:
             self.file_lengths = [self.file_lengths[i] for i in selected_indices]
 
-            # 重新创建sorted_indices（在新的子集中的排序）
+            # Rebuild sorted_indices (ordering within the new subset)
             self.sorted_indices = sorted(
                 range(len(self.file_lengths)),
                 key=lambda i: self.file_lengths[i]
@@ -172,22 +172,20 @@ class PianoDataset(Dataset):
 
     def __len__(self):
         return len(self.data_files)
-    
+
     def _process_measure_with_beat_interleaving(
         self,
         measure,
     ):
-        """
-        在每一拍级别交错处理高声部和低声部
+        """Process the upper and lower parts interleaved at the beat level.
 
         Args:
-            measure: (4, 88, t) - 前2通道part0(高声部)，后2通道part1(低声部)
-            tokenizer: PianoRollTokenizer实例
-            timesteps_per_beat: 每拍的时间步数
+            measure: (4, 88, t) - first 2 channels are part0 (upper voice),
+                last 2 channels are part1 (lower voice).
 
         Returns:
-            part0_beat_tokens: part0的beat级别token列表
-            part1_beat_tokens: part1的beat级别token列表
+            part0_beat_tokens: beat-level token list for part0.
+            part1_beat_tokens: beat-level token list for part1.
         """
         part0_beat_tokens = []
         part1_beat_tokens = []
@@ -195,31 +193,31 @@ class PianoDataset(Dataset):
         t = measure.shape[2]
         beat_length = self.patch_w
 
-        # 计算实际有多少拍
-        num_beats = (t + beat_length - 1) // beat_length  # 向上取整
+        # Compute the actual number of beats
+        num_beats = (t + beat_length - 1) // beat_length  # round up
 
         for beat_idx in range(num_beats):
-            # 计算当前拍的时间范围
+            # Compute the time range of the current beat
             start_t = beat_idx * beat_length
             end_t = min(start_t + beat_length, t)
 
-            # 如果最后一拍不够长，需要padding
+            # Pad if the last beat is not long enough
             beat_measure = measure[:, :, start_t:end_t]
             current_length = end_t - start_t
 
             if current_length < beat_length:
-                # Padding到完整的拍长度
+                # Pad to a full beat length
                 pad_width = ((0, 0), (0, 0), (0, beat_length - current_length))
                 beat_measure = np.pad(beat_measure, pad_width, mode='constant', constant_values=0)
 
-            # === 处理part0 (高声部) ===
+            # === Process part0 (upper voice) ===
             part0_beat = beat_measure[:2]  # (2, 88, beat_length)
             tokens_0 = self.tokenizer.image_to_patch_tokens(part0_beat, strict_mode=True)
             compressed_tokens_0 = self.tokenizer.compress_tokens(
                 tokens_0, split_marker_id=self.split_0_id, empty_marker_id=self.empty_marker_id)
             part0_beat_tokens.append(torch.tensor(compressed_tokens_0, dtype=torch.long))
 
-            # === 处理part1 (低声部) ===
+            # === Process part1 (lower voice) ===
             part1_beat = beat_measure[2:]  # (2, 88, beat_length)
             tokens_1 = self.tokenizer.image_to_patch_tokens(part1_beat, strict_mode=True)
             compressed_tokens_1 = self.tokenizer.compress_tokens(
@@ -227,18 +225,17 @@ class PianoDataset(Dataset):
             part1_beat_tokens.append(torch.tensor(compressed_tokens_1, dtype=torch.long))
 
         return part0_beat_tokens, part1_beat_tokens
-    
+
 
     def _interleave_tokens(self, part0_beats, part1_beats):
-        """
-        交错拼接 part0 和 part1 的 tokens
+        """Interleave and concatenate the tokens of part0 and part1.
 
         Args:
-            part0_beats: part0的beat tokens列表  [tensor0, tensor0, ...]
-            part1_beats: part1的beat tokens列表
+            part0_beats: list of part0 beat tokens [tensor0, tensor0, ...].
+            part1_beats: list of part1 beat tokens.
 
         Returns:
-            交错拼接后的tensor
+            The interleaved, concatenated tensor.
         """
         tokens = []
         for p0, p1 in zip(part0_beats, part1_beats):
@@ -246,41 +243,41 @@ class PianoDataset(Dataset):
             tokens.append(p1)
         return torch.cat(tokens, dim=0)
 
-    
+
     def __getitem__(self, idx):
-        # 加载数据
+        # Load the data
         file_path = os.path.join(self.root_dir, self.data_files[idx])
         file_name = self.data_files[idx]
         save_dict = np.load(file_path, allow_pickle=True)
         metadata = save_dict['metadata'].item()
 
-        # 提取元数据
+        # Extract metadata
         time_sig_idx = metadata['time_signature_idx']
         if time_sig_idx == 9:
-            time_sig_idx = 4  # 处理特殊拍号
+            time_sig_idx = 4  # handle a special time signature
 
         bpm_value = metadata['bpm']
         num_measures = metadata['num_measures']
         is_continuation = metadata.get('is_continuation', False)
 
-        # 判断是否添加BOS（根据文件名）
+        # Decide whether to add BOS (based on the file name)
         add_bos = True
         if '_' in file_name:
             suffix = file_name.split('_')[-1].replace('.npz', '')
             if suffix.isdigit() and suffix != '1':
                 add_bos = False
 
-        # 随机音高偏移（数据增强）
+        # Random pitch shift (data augmentation)
         pitch_shift = 0
         if np.random.random() < 0.7:
             pitch_shift = np.random.randint(-5, 6)
 
-        # 处理所有measures，收集tokens
+        # Process all measures and collect tokens
         measure_tokens = []
         for i in range(num_measures):
             measure = save_dict[f'measure_{i}']
             measure = measure[:, ::-1, :].copy()
-            # 应用音高偏移
+            # Apply the pitch shift
             if pitch_shift != 0:
                 measure = np.roll(measure, pitch_shift, axis=1)
                 if pitch_shift > 0:
@@ -288,58 +285,58 @@ class PianoDataset(Dataset):
                 else:
                     measure[:, pitch_shift:, :] = 0
 
-            # 处理beat并交错
+            # Process beats and interleave
             part0_beats, part1_beats = self._process_measure_with_beat_interleaving(measure)
             beat_tokens = self._interleave_tokens(part0_beats, part1_beats)
 
-            # 添加bar token和beat tokens
+            # Add the bar token and the beat tokens
             measure_tokens.append(torch.tensor([self.bar_token], dtype=torch.long))
             measure_tokens.append(beat_tokens)
 
-        # 构建完整序列
+        # Build the full sequence
         tokens = []
         labels = []
 
-        # 添加BOS
+        # Add BOS
         if add_bos:
             tokens.append(torch.tensor([self.bos_token], dtype=torch.long))
             labels.append(torch.tensor([-100], dtype=torch.long))
 
-        # 添加拍号和BPM
+        # Add time signature and BPM
         time_sig_token = time_sig_idx + self.time_sig_offset_id
         bpm_token = encode_bpm(bpm_value) + self.bpm_offset_id
         tokens.append(torch.tensor([time_sig_token, bpm_token], dtype=torch.long))
         labels.append(torch.tensor([-100, -100], dtype=torch.long))
 
-        # 添加音乐内容
+        # Add the musical content
         content = torch.cat(measure_tokens)
         tokens.append(content)
         labels.append(content)
 
-        # 添加EOS
+        # Add EOS
         if not is_continuation:
             tokens.append(torch.tensor([self.eos_token], dtype=torch.long))
             labels.append(torch.tensor([self.eos_token], dtype=torch.long))
 
-        # 拼接所有tokens
+        # Concatenate all tokens
         input_ids = torch.cat(tokens)
         labels = torch.cat(labels)
 
-        # 超长截断：随机截取片段，前8%不计入损失
+        # Overlength truncation: take a random segment; the first 8% is not counted in the loss
         seq_len = len(input_ids)
 
         if seq_len > self.max_seq_len :
             prob = np.random.random()
             if  prob < 0.25:
-                # 从开头截断
+                # Truncate from the start
                 input_ids = input_ids[:self.max_seq_len]
                 labels = labels[:self.max_seq_len]
             elif prob < 0.5:
-                # 从结尾截断
+                # Truncate from the end
                 input_ids = input_ids[-self.max_seq_len:]
                 labels = labels[-self.max_seq_len:]
 
-                # 前8%不计入损失
+                # The first 8% is not counted in the loss
                 ignore_len = int(self.max_seq_len * 0.08)
                 labels[:ignore_len] = -100
 
@@ -348,11 +345,11 @@ class PianoDataset(Dataset):
                 input_ids = input_ids[start_idx:start_idx + self.max_seq_len]
                 labels = labels[start_idx:start_idx + self.max_seq_len]
 
-                # 前8%不计入损失
+                # The first 8% is not counted in the loss
                 ignore_len = int(self.max_seq_len * 0.08)
                 labels[:ignore_len] = -100
-            
-        
+
+
 
         return {
             'input_ids': input_ids,
@@ -361,78 +358,78 @@ class PianoDataset(Dataset):
 
 
 class BucketBatchSampler(Sampler):
-    """长度感知的批采样器"""
-    
+    """Length-aware batch sampler."""
+
     def __init__(self, dataset, batch_size=16, bucket_size=100, shuffle=True):
         """
         Args:
-            dataset: PianoDataset实例
-            batch_size: 实际训练的batch大小
-            bucket_size: 每个长度bucket的大小
-            shuffle: 是否随机化
+            dataset: PianoDataset instance.
+            batch_size: actual training batch size.
+            bucket_size: size of each length bucket.
+            shuffle: whether to randomize.
         """
         self.dataset = dataset
         self.batch_size = batch_size
         self.bucket_size = bucket_size
         self.shuffle = shuffle
-        
+
         if dataset.sorted_indices is None:
-            raise ValueError("Dataset需要启用cache_lengths=True")
-        
+            raise ValueError("Dataset needs cache_lengths=True")
+
         self._create_buckets()
-    
+
     def _create_buckets(self):
-        """将相近长度的样本分组到buckets中"""
+        """Group samples of similar length into buckets."""
         self.buckets = []
         sorted_indices = self.dataset.sorted_indices
-        
-        # 将排序后的索引分割成buckets
+
+        # Split the sorted indices into buckets
         for i in range(0, len(sorted_indices), self.bucket_size):
             bucket = sorted_indices[i:i + self.bucket_size]
             self.buckets.append(bucket)
-        
-        print(f"创建了 {len(self.buckets)} 个长度buckets")
-    
+
+        print(f"Created {len(self.buckets)} length buckets")
+
     def __iter__(self):
-        """生成batch索引"""
-        # 随机打乱buckets的顺序
+        """Yield batch indices."""
+        # Randomly shuffle the order of the buckets
         if self.shuffle:
             bucket_order = np.random.permutation(len(self.buckets))
         else:
             bucket_order = range(len(self.buckets))
-        
+
         for bucket_idx in bucket_order:
             bucket = self.buckets[bucket_idx].copy()
-            
-            # 在bucket内部随机打乱
+
+            # Shuffle within the bucket
             if self.shuffle:
                 np.random.shuffle(bucket)
-            
-            # 从bucket中生成batches
+
+            # Produce batches from the bucket
             for i in range(0, len(bucket), self.batch_size):
                 batch = bucket[i:i + self.batch_size]
-                if len(batch) > 0:  # 确保不是空batch
+                if len(batch) > 0:  # make sure the batch is not empty
                     yield batch
-    
+
     def __len__(self):
         return sum(len(bucket) for bucket in self.buckets) // self.batch_size
 
 
 @dataclass
 class DataCollatorForVariableLengthLM:
-    """数据整理器，支持动态padding"""
-    
+    """Data collator supporting dynamic padding."""
+
     def __init__(self, config):
         self.pad_token_id = config.pad_token_id
         self.max_length = config.train_cutoff_len
-    
+
     def __call__(self, features: List[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
-        # 获取批次中的最大长度
+        # Get the maximum length in the batch
         max_len = min(
             max(len(feature["input_ids"]) for feature in features),
             self.max_length
         )
-        
+
         batch = {
             "input_ids": [],
             "labels": [],

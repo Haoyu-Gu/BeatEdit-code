@@ -1,12 +1,12 @@
 """
 Token to MIDI Converter
 
-将模型生成的token序列转换为MIDI文件的完整流程：
-1. 提取元数据（拍号、BPM）
-2. 按bar_token_id划分小节
-3. 对每个小节分离双轨道并解码为pianoroll
-4. 拼接所有小节
-5. 转换为MIDI文件
+Full pipeline to convert a model-generated token sequence into a MIDI file:
+1. Extract metadata (time signature, BPM).
+2. Split into bars by bar_token_id.
+3. For each bar, separate the two tracks and decode them into piano rolls.
+4. Concatenate all bars.
+5. Convert to a MIDI file.
 
 Author: Refactored version
 """
@@ -19,25 +19,24 @@ from my_tokenizer import PianoRollTokenizer
 
 
 class Token2MIDI:
-    """
-    Token序列到MIDI的转换器
+    """Converter from a token sequence to MIDI.
 
-    处理流程：
-    1. 从token序列提取元数据（拍号、BPM）
-    2. 按bar_token_id划分小节
-    3. 对每个小节：
-       - 分离track0和track1的beat tokens
-       - 使用tokenizer解码为pianoroll
-       - 拼接成完整小节
-    4. 合并所有小节
-    5. 对齐双轨道时间长度
-    6. 转换为MIDI文件
+    Pipeline:
+    1. Extract metadata (time signature, BPM) from the token sequence.
+    2. Split into bars by bar_token_id.
+    3. For each bar:
+       - Separate the beat tokens of track0 and track1.
+       - Decode into piano rolls using the tokenizer.
+       - Concatenate into a full bar.
+    4. Merge all bars.
+    5. Align the time length of the two tracks.
+    6. Convert to a MIDI file.
 
-    参数：
-        tokenizer: PianoRollTokenizer实例
-        config: ModelConfig配置对象
+    Args:
+        tokenizer: PianoRollTokenizer instance.
+        config: ModelConfig object.
 
-    示例：
+    Example:
         >>> from my_tokenizer import PianoRollTokenizer
         >>> from config import ModelConfig
         >>>
@@ -53,16 +52,15 @@ class Token2MIDI:
     """
 
     def __init__(self, tokenizer: PianoRollTokenizer, config):
-        """
-        初始化转换器
+        """Initialize the converter.
 
         Args:
-            tokenizer: PianoRollTokenizer实例
-            config: 配置对象，包含各种token ID定义
+            tokenizer: PianoRollTokenizer instance.
+            config: configuration object with the various token ID definitions.
         """
         self.tokenizer = tokenizer
 
-        # Token ID配置
+        # Token ID configuration
         self.bar_token_id = config.bar_token_id
         self.bos_token_id = config.bos_token_id
         self.eos_token_id = config.eos_token_id
@@ -70,12 +68,12 @@ class Token2MIDI:
         self.end_marker_id = config.end_marker_id
         self.pattern_num = config.pattern_num
 
-        # 元数据配置
+        # Metadata configuration
         self.time_sig_offset_id = config.time_sig_offset_id
         self.bpm_offset_id = config.bpm_offset_id
 
-        # Patch配置
-        self.patch_w = config.patch_w  # 每个beat的时间步长度
+        # Patch configuration
+        self.patch_w = config.patch_w  # number of time steps per beat
 
     def convert(
         self,
@@ -85,81 +83,79 @@ class Token2MIDI:
         velocity: int = 64,
         merge_tracks: bool = False
     ) -> str:
-        """
-        将token序列转换为MIDI文件（主入口）
+        """Convert a token sequence into a MIDI file (main entry point).
 
         Args:
-            token_sequence: 完整的token序列（包含BOS/EOS）
-            output_path: MIDI文件保存路径
-            tempo: 节拍速度（BPM），如果为None则从序列中提取
-            velocity: MIDI音符力度 (1-127)
+            token_sequence: full token sequence (including BOS/EOS).
+            output_path: path to save the MIDI file.
+            tempo: tempo (BPM); if None, extracted from the sequence.
+            velocity: MIDI note velocity (1-127).
 
         Returns:
-            output_path: 保存的MIDI文件路径
+            output_path: path of the saved MIDI file.
         """
-        # 转换为numpy array
+        # Convert to a numpy array
         if isinstance(token_sequence, torch.Tensor):
             token_sequence = token_sequence.cpu().numpy()
         elif isinstance(token_sequence, list):
             token_sequence = np.array(token_sequence)
 
-        print(f"原始token序列长度: {len(token_sequence)}")
+        print(f"Raw token sequence length: {len(token_sequence)}")
 
-        # 1. 提取元数据
+        # 1. Extract metadata
         time_signature, bpm = self._extract_metadata(token_sequence)
         if tempo is None:
             tempo = bpm
-        print(f"元数据 - 拍号: {time_signature}, BPM: {bpm} (使用tempo={tempo})")
+        print(f"Metadata - time signature: {time_signature}, BPM: {bpm} (using tempo={tempo})")
 
-        # 2. 提取音乐内容（去除BOS、元数据、EOS）
+        # 2. Extract the musical content (drop BOS, metadata, EOS)
         music_tokens = self._extract_music_tokens(token_sequence)
-        print(f"音乐内容token数量: {len(music_tokens)}")
+        print(f"Musical content token count: {len(music_tokens)}")
 
-        # 3. 按小节划分
+        # 3. Split into bars
         bars = self._split_by_bars(music_tokens)
-        print(f"划分为 {len(bars)} 个小节")
+        print(f"Split into {len(bars)} bars")
 
-        # 4. 处理每个小节，得到双轨道pianoroll
+        # 4. Process each bar to obtain the two-track piano rolls
         track0_pianorolls = []
         track1_pianorolls = []
 
         for bar_idx, bar_tokens in enumerate(bars):
             track0_pr, track1_pr = self._process_bar(bar_tokens)
-            # 对齐每个小节的双轨道长度
+            # Align the two-track length within each bar
             track0_pr, track1_pr = self._align_tracks(track0_pr, track1_pr)
             track0_pianorolls.append(track0_pr)
             track1_pianorolls.append(track1_pr)
 
-        # 5. 拼接所有小节（已在小节级别对齐，无需再次对齐）
+        # 5. Concatenate all bars (already aligned at bar level, no need to realign)
         track0_full = np.concatenate(track0_pianorolls, axis=-1)  # (2, 88, total_time)
         track1_full = np.concatenate(track1_pianorolls, axis=-1)
-        # 6. 合并双轨道为4通道pianoroll
+        # 6. Merge the two tracks into a 4-channel piano roll
         combined_pianoroll = np.concatenate([track0_full, track1_full], axis=0)  # (4, 88, time)
         combined_pianoroll = combined_pianoroll[:, ::-1, :].copy()
         if merge_tracks:
-            # 如果需要合并为单轨道，可以在这里实现
+            # Merge into a single track if requested
             combined_pianoroll = np.maximum(track0_full, track1_full)
             self._pianoroll_to_midi_single_track(combined_pianoroll, output_path, tempo, velocity)
         else:
-        # 8. 转换为MIDI
+        # 8. Convert to MIDI
             self._pianoroll_to_midi(combined_pianoroll, output_path, tempo, velocity)
 
         return output_path
 
     def _extract_metadata(self, token_sequence: np.ndarray) -> Tuple[str, int]:
-        """
-        提取拍号和BPM
+        """Extract the time signature and BPM.
 
-        序列格式: [BOS, time_sig, bpm, music_content..., EOS]
+        Sequence format: [BOS, time_sig, bpm, music_content..., EOS].
 
         Args:
-            token_sequence: 完整token序列
+            token_sequence: full token sequence.
 
         Returns:
-            time_signature: 拍号字符串 (如 "4/4")
-            bpm: 节拍速度
+            time_signature: time-signature string (e.g. "4/4").
+            bpm: tempo.
         """
-        # 拍号映射 (根据config.py中的time_sig_offset_id)
+        # Time-signature map (matches time_sig_offset_id in config.py)
         time_sig_map = {
             0: '4/4',
             1: '3/4',
@@ -168,20 +164,20 @@ class Token2MIDI:
             4: '2/2'
         }
 
-        # BPM映射 (根据PianoDataset.py中的encode_bpm函数)
+        # BPM map (matches the encode_bpm function in PianoDataset.py)
         bpm_map = {
-            0: 80,   # 慢速 <90
-            1: 120,  # 中速 90-200
-            2: 220,  # 快速 >200
-            3: 120   # 未知，默认120
+            0: 80,   # slow <90
+            1: 120,  # medium 90-200
+            2: 220,  # fast >200
+            3: 120   # unknown, default 120
         }
 
-        # 提取拍号 (位置1)
+        # Extract the time signature (position 1)
         time_sig_token = int(token_sequence[1])
         time_sig_idx = time_sig_token - self.time_sig_offset_id
         time_signature = time_sig_map.get(time_sig_idx, '4/4')
 
-        # 提取BPM (位置2)
+        # Extract the BPM (position 2)
         bpm_token = int(token_sequence[2])
         bpm_idx = bpm_token - self.bpm_offset_id
         bpm = bpm_map.get(bpm_idx, 120)
@@ -189,19 +185,18 @@ class Token2MIDI:
         return time_signature, bpm
 
     def _extract_music_tokens(self, token_sequence: np.ndarray) -> np.ndarray:
-        """
-        提取音乐内容token（去除BOS、元数据、EOS）
+        """Extract the musical content tokens (drop BOS, metadata, EOS).
 
         Args:
-            token_sequence: 完整token序列
+            token_sequence: full token sequence.
 
         Returns:
-            music_tokens: 纯音乐内容的token序列
+            music_tokens: token sequence of pure musical content.
         """
-        # 去除BOS (位置0)、拍号 (位置1)、BPM (位置2)
+        # Drop BOS (position 0), time signature (position 1), BPM (position 2)
         start_idx = 3
 
-        # 查找EOS并去除
+        # Find and drop EOS
         end_idx = len(token_sequence)
         if token_sequence[-1] == self.eos_token_id:
             end_idx = -1
@@ -209,67 +204,67 @@ class Token2MIDI:
         return token_sequence[start_idx:end_idx]
 
     def _split_by_bars(self, music_tokens: np.ndarray) -> List[np.ndarray]:
-        """
-        按bar_token_id划分小节
+        """Split into bars by bar_token_id.
 
         Args:
-            music_tokens: 音乐内容token序列
+            music_tokens: token sequence of musical content.
 
         Returns:
-            bars: 小节token列表，每个元素是一个小节的tokens（不包含bar_token_id本身）
+            bars: list of bar tokens; each element is one bar's tokens
+                (excluding bar_token_id itself).
         """
-        # 找到所有bar token的位置
+        # Find the positions of all bar tokens
         bar_positions = np.where(music_tokens == self.bar_token_id)[0]
 
         bars = []
         for i in range(len(bar_positions)):
-            start = bar_positions[i] + 1  # 跳过bar token本身
+            start = bar_positions[i] + 1  # skip the bar token itself
             end = bar_positions[i + 1] if i + 1 < len(bar_positions) else len(music_tokens)
             bar_tokens = music_tokens[start:end]
-            if len(bar_tokens) > 0:  # 忽略空小节
+            if len(bar_tokens) > 0:  # ignore empty bars
                 bars.append(bar_tokens)
 
         return bars
 
     def _process_bar(self, bar_tokens: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        处理单个小节：分离双轨道并解码为pianoroll
+        """Process a single bar: separate the two tracks and decode into piano rolls.
 
-        小节内格式：[高beat0][低beat0][高beat1][低beat1]...
-        每个beat以 empty_marker 或 end_marker 结尾
-        轨道由交替顺序决定：偶数beat=track0(高), 奇数beat=track1(低)
+        In-bar format: [track0_beat0][track1_beat0][track0_beat1][track1_beat1]...
+        Each beat ends with an empty_marker or end_marker.
+        Track assignment follows the alternating order: even beats = track0
+        (upper voice), odd beats = track1 (lower voice).
 
         Args:
-            bar_tokens: 单个小节的token序列
+            bar_tokens: token sequence of a single bar.
 
         Returns:
-            track0_pianoroll: track0的pianoroll (2, 88, time)
-            track1_pianoroll: track1的pianoroll (2, 88, time)
+            track0_pianoroll: piano roll of track0 (2, 88, time).
+            track1_pianoroll: piano roll of track1 (2, 88, time).
         """
-        # 分离track0和track1的beats
+        # Separate the beats of track0 and track1
         track0_beats, track1_beats = self._separate_tracks(bar_tokens)
 
-        # 解码每个轨道
+        # Decode each track
         track0_pianoroll = self._decode_track_beats(track0_beats)
         track1_pianoroll = self._decode_track_beats(track1_beats)
 
         return track0_pianoroll, track1_pianoroll
 
     def _separate_tracks(self, bar_tokens: np.ndarray) -> Tuple[List[np.ndarray], List[np.ndarray]]:
-        """
-        从小节中分离track0和track1的beat tokens
+        """Separate the beat tokens of track0 and track1 within a bar.
 
-        通过 empty_marker/end_marker 边界划分beat，然后按交替顺序分配：
-        偶数索引(0,2,4...)=track0(高声部), 奇数索引(1,3,5...)=track1(低声部)
+        Splits beats at empty_marker/end_marker boundaries, then assigns
+        them in alternating order: even indices (0,2,4...) = track0
+        (upper voice), odd indices (1,3,5...) = track1 (lower voice).
 
         Args:
-            bar_tokens: 小节内的所有tokens
+            bar_tokens: all tokens within a bar.
 
         Returns:
-            track0_beats: track0的beat token列表
-            track1_beats: track1的beat token列表
+            track0_beats: list of track0 beat tokens.
+            track1_beats: list of track1 beat tokens.
         """
-        # 按 empty_marker/end_marker 边界划分beat segments
+        # Split into beat segments at empty_marker/end_marker boundaries
         beats = []
         i = 0
 
@@ -277,24 +272,25 @@ class Token2MIDI:
             token = bar_tokens[i]
 
             if token == self.empty_marker_id:
-                # 空beat: 单个 empty_marker
+                # Empty beat: a single empty_marker
                 beats.append(bar_tokens[i:i+1])
                 i += 1
 
             elif self.pattern_num <= token < self.empty_marker_id:
-                # 非空beat: 从当前位置到 end_marker（含）
+                # Non-empty beat: from the current position up to (and
+                # including) end_marker
                 start = i
                 while i < len(bar_tokens) and bar_tokens[i] != self.end_marker_id:
                     i += 1
                 if i < len(bar_tokens):
-                    i += 1  # 跳过 end_marker
+                    i += 1  # skip end_marker
                 beats.append(bar_tokens[start:i])
 
             else:
-                # 非预期token，跳过
+                # Unexpected token - skip it
                 i += 1
 
-        # 按交替顺序分配：偶数=track0, 奇数=track1
+        # Assign in alternating order: even = track0, odd = track1
         track0_beats = []
         track1_beats = []
         for idx, beat in enumerate(beats):
@@ -306,26 +302,25 @@ class Token2MIDI:
         return track0_beats, track1_beats
 
     def _decode_track_beats(self, beat_token_list: List[np.ndarray]) -> np.ndarray:
-        """
-        解码单个轨道的所有beats为pianoroll
+        """Decode all beats of a single track into a piano roll.
 
         Args:
-            beat_token_list: beat token列表
+            beat_token_list: list of beat tokens.
 
         Returns:
-            pianoroll: 解码后的pianoroll (2, 88, total_time)
+            pianoroll: decoded piano roll (2, 88, total_time).
         """
         beat_pianorolls = []
 
         for beat_tokens in beat_token_list:
-            # 解压缩tokens为token矩阵
+            # Decompress tokens into a token matrix
             token_matrix = self.tokenizer.decompress_tokens(
                 beat_tokens,
                 empty_marker_id=self.empty_marker_id,
                 end_marker_id=self.end_marker_id
             )
 
-            # 转换为pianoroll
+            # Convert into a piano roll
             if token_matrix.shape[0] > 0:
                 pianoroll = self.tokenizer.patch_tokens_to_image(token_matrix)  # (2, 88, patch_w)
             else:
@@ -333,11 +328,11 @@ class Token2MIDI:
 
             beat_pianorolls.append(pianoroll)
 
-        # 拼接所有beats
+        # Concatenate all beats
         if len(beat_pianorolls) > 0:
             full_pianoroll = np.concatenate(beat_pianorolls, axis=-1)
         else:
-            # 空轨道
+            # Empty track
             full_pianoroll = np.zeros((2, 88, self.patch_w), dtype=np.float32)
 
         return full_pianoroll
@@ -347,16 +342,15 @@ class Token2MIDI:
         track0: np.ndarray,
         track1: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        对齐两个轨道的时间长度（padding到相同长度）
+        """Align the time length of two tracks (pad to the same length).
 
         Args:
-            track0: track0的pianoroll (2, 88, t0)
-            track1: track1的pianoroll (2, 88, t1)
+            track0: piano roll of track0 (2, 88, t0).
+            track1: piano roll of track1 (2, 88, t1).
 
         Returns:
-            track0_aligned: 对齐后的track0
-            track1_aligned: 对齐后的track1
+            track0_aligned: aligned track0.
+            track1_aligned: aligned track1.
         """
         t0 = track0.shape[-1]
         t1 = track1.shape[-1]
@@ -366,7 +360,7 @@ class Token2MIDI:
 
         max_len = max(t0, t1)
 
-        # Padding较短的轨道
+        # Pad the shorter track
         if t0 < max_len:
             pad_width = ((0, 0), (0, 0), (0, max_len - t0))
             track0 = np.pad(track0, pad_width, mode='constant', constant_values=0)
@@ -384,22 +378,21 @@ class Token2MIDI:
         tempo: int,
         velocity: int
     ):
-        """
-        将4通道pianoroll转换为MIDI文件
+        """Convert a 4-channel piano roll into a MIDI file.
 
         Args:
-            pianoroll: (4, 88, time) - [track0_sustain, track0_onset, track1_sustain, track1_onset]
-            output_path: MIDI文件保存路径
-            tempo: 节拍速度 (BPM)
-            velocity: MIDI音符力度
+            pianoroll: (4, 88, time) - [track0_sustain, track0_onset, track1_sustain, track1_onset].
+            output_path: path to save the MIDI file.
+            tempo: tempo (BPM).
+            velocity: MIDI note velocity.
         """
-        # 创建MIDI对象
+        # Create the MIDI object
         midi = pretty_midi.PrettyMIDI(initial_tempo=tempo)
 
-        # 计算每个时间单位的秒数（基于patch_w，通常是1/16音符）
-        seconds_per_step = 60.0 / tempo / 4  # 假设patch_w=4对应1拍，每步1/16拍
+        # Compute the seconds per time step (based on patch_w, usually a 1/16 note)
+        seconds_per_step = 60.0 / tempo / 4  # assume patch_w=4 maps to one beat, each step a 1/16 beat
 
-        # 处理track0 (通常是高声部/旋律)
+        # Process track0 (usually the upper voice / melody)
         track0_sustain = pianoroll[0]  # (88, time)
         track0_onset = pianoroll[1]
         piano_track0 = self._create_midi_track(
@@ -411,7 +404,7 @@ class Token2MIDI:
         )
         midi.instruments.append(piano_track0)
 
-        # 处理track1 (通常是低声部/伴奏)
+        # Process track1 (usually the lower voice / accompaniment)
         track1_sustain = pianoroll[2]
         track1_onset = pianoroll[3]
         piano_track1 = self._create_midi_track(
@@ -423,13 +416,13 @@ class Token2MIDI:
         )
         midi.instruments.append(piano_track1)
 
-        # 保存MIDI文件
+        # Save the MIDI file
         midi.write(output_path)
 
-        print(f"\nMIDI文件已保存到: {output_path}")
-        print(f"总时长: {midi.get_end_time():.2f} 秒")
-        print(f"Track0音符数: {len(piano_track0.notes)}")
-        print(f"Track1音符数: {len(piano_track1.notes)}")
+        print(f"\nMIDI file saved to: {output_path}")
+        print(f"Total duration: {midi.get_end_time():.2f} s")
+        print(f"Track0 note count: {len(piano_track0.notes)}")
+        print(f"Track1 note count: {len(piano_track1.notes)}")
 
     def _pianoroll_to_midi_single_track(
         self,
@@ -438,22 +431,21 @@ class Token2MIDI:
         tempo: int,
         velocity: int
     ):
-        """
-        将4通道pianoroll转换为MIDI文件
+        """Convert a 4-channel piano roll into a MIDI file.
 
         Args:
-            pianoroll: (4, 88, time) - [track0_sustain, track0_onset, track1_sustain, track1_onset]
-            output_path: MIDI文件保存路径
-            tempo: 节拍速度 (BPM)
-            velocity: MIDI音符力度
+            pianoroll: (4, 88, time) - [track0_sustain, track0_onset, track1_sustain, track1_onset].
+            output_path: path to save the MIDI file.
+            tempo: tempo (BPM).
+            velocity: MIDI note velocity.
         """
-        # 创建MIDI对象
+        # Create the MIDI object
         midi = pretty_midi.PrettyMIDI(initial_tempo=tempo)
 
-        # 计算每个时间单位的秒数（基于patch_w，通常是1/16音符）
-        seconds_per_step = 60.0 / tempo / 4  # 假设patch_w=4对应1拍，每步1/16拍
+        # Compute the seconds per time step (based on patch_w, usually a 1/16 note)
+        seconds_per_step = 60.0 / tempo / 4  # assume patch_w=4 maps to one beat, each step a 1/16 beat
 
-        # 处理track0 (通常是高声部/旋律)
+        # Process track0 (usually the upper voice / melody)
         track0_sustain = pianoroll[0]  # (88, time)
         track0_onset = pianoroll[1]
         piano_track0 = self._create_midi_track(
@@ -466,12 +458,12 @@ class Token2MIDI:
         midi.instruments.append(piano_track0)
 
 
-        # 保存MIDI文件
+        # Save the MIDI file
         midi.write(output_path)
 
-        print(f"\nMIDI文件已保存到: {output_path}")
-        print(f"总时长: {midi.get_end_time():.2f} 秒")
-        print(f"Track0音符数: {len(piano_track0.notes)}")
+        print(f"\nMIDI file saved to: {output_path}")
+        print(f"Total duration: {midi.get_end_time():.2f} s")
+        print(f"Track0 note count: {len(piano_track0.notes)}")
 
     def _create_midi_track(
         self,
@@ -481,41 +473,40 @@ class Token2MIDI:
         velocity: int,
         program: int = 0
     ) -> pretty_midi.Instrument:
-        """
-        从sustain和onset pianoroll创建MIDI轨道
+        """Create a MIDI track from sustain and onset piano rolls.
 
         Args:
-            sustain_roll: (88, time) sustain通道
-            onset_roll: (88, time) onset通道
-            seconds_per_step: 每个时间步的秒数
-            velocity: 音符力度
-            program: MIDI乐器编号
+            sustain_roll: (88, time) sustain channel.
+            onset_roll: (88, time) onset channel.
+            seconds_per_step: seconds per time step.
+            velocity: note velocity.
+            program: MIDI program number.
 
         Returns:
-            instrument: PrettyMIDI乐器对象
+            instrument: PrettyMIDI instrument object.
         """
         instrument = pretty_midi.Instrument(program=program)
 
-        # 遍历每个音高
+        # Iterate over each pitch
         for pitch_idx in range(88):
-            pitch = pitch_idx + 21  # MIDI音高 (A0=21开始)
+            pitch = pitch_idx + 21  # MIDI pitch (A0=21 and up)
 
-            # 找到所有onset位置
+            # Find all onset positions
             onset_positions = np.where(onset_roll[pitch_idx] > 0)[0]
 
             for onset_pos in onset_positions:
-                # 找到音符结束位置（sustain结束）
+                # Find the note end position (end of sustain)
                 end_pos = onset_pos + 1
 
-                # 继续向后查找直到sustain结束
+                # Keep searching forward until sustain ends
                 while end_pos < sustain_roll.shape[1] and sustain_roll[pitch_idx, end_pos] > 0:
                     end_pos += 1
 
-                # 转换为时间（秒）
+                # Convert to time (seconds)
                 start_time = onset_pos * seconds_per_step
                 end_time = end_pos * seconds_per_step
 
-                # 创建MIDI音符
+                # Create the MIDI note
                 note = pretty_midi.Note(
                     velocity=velocity,
                     pitch=pitch,

@@ -11,18 +11,18 @@ If per-sample scores are not available, re-computes from test_data + predictions
 
 Usage:
     # Compare two methods on one task:
-    conda run --no-capture-output -n musictoken python -u \
-        unified_eval/statistical_tests.py --task editing \
+    python \
+        evaluation/statistical_tests.py --task editing \
         --method_a gector --method_b felix --schemes A,B,C,D
 
     # Full pairwise comparison table:
-    conda run --no-capture-output -n musictoken python -u \
-        unified_eval/statistical_tests.py --task editing --all_pairs \
+    python \
+        evaluation/statistical_tests.py --task editing --all_pairs \
         --methods gector,felix,no_edit --schemes A,B,C,D
 
     # Use existing result JSONs with per_sample data:
-    conda run --no-capture-output -n musictoken python -u \
-        unified_eval/statistical_tests.py --task editing \
+    python \
+        evaluation/statistical_tests.py --task editing \
         --method_a gector --method_b felix --from_results
 """
 
