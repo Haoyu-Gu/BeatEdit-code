@@ -259,12 +259,22 @@ Training time estimates (2x GPU):
 - IterEdit: ~10-15h
 - TagFill: ~8-10h per scheme (tagger) + ~8-10h (inserter)
 
+## Authors
+
+Haoyu Gu<sup>1</sup>, Lekai Qian<sup>1</sup>, Haowu Zhou<sup>1</sup>,
+Qi Liu<sup>1,\*</sup>, Shuai Wang<sup>2,\*</sup>
+
+<sup>1</sup> School of Future Technology, South China University of Technology, Guangzhou, China
+<sup>2</sup> School of Intelligence Science and Technology, Nanjing University, Suzhou, China
+
+<sup>\*</sup> Corresponding authors.
+
 ## Citation
 
 ```bibtex
-@inproceedings{beatedit2026,
+@inproceedings{gu2026beatedit,
   title     = {BeatEdit: Symbolic Music Generation as Explicit Editing},
-  author    = {TODO: camera-ready author list},
+  author    = {Gu, Haoyu and Qian, Lekai and Zhou, Haowu and Liu, Qi and Wang, Shuai},
   booktitle = {Proceedings of the 34th ACM International Conference on Multimedia},
   year      = {2026}
 }
