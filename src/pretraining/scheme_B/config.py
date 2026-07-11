@@ -105,6 +105,7 @@ class BertPretrainConfig:
         self.data_dir = os.environ.get("BEATEDIT_DATA_DIR", self.data_dir)
         self.num_epochs = int(os.environ.get("BEATEDIT_EPOCHS", self.num_epochs))
         self.batch_size = int(os.environ.get("BEATEDIT_BATCH", self.batch_size))
+        self.mixed_precision = os.environ.get("BEATEDIT_PRECISION", self.mixed_precision)
 
 
     # DataLoader

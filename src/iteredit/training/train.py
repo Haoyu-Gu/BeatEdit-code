@@ -41,6 +41,20 @@ from data.dataset import (
 from models.levenshtein_transformer import LevenshteinTransformer
 
 
+def _dataloader_workers(requested):
+    """Number of DataLoader workers that is safe on this platform.
+
+    The per-scheme modules are loaded by path (importlib / sys.modules
+    juggling), so their classes cannot be pickled into workers started with
+    the "spawn" method (macOS, Windows). Fall back to in-process loading
+    there; Linux uses "fork" and keeps the workers.
+    """
+    import multiprocessing
+    if multiprocessing.get_start_method(allow_none=False) != 'fork':
+        return 0
+    return requested
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Train LevT Music Inpainting')
     parser.add_argument('--epochs', type=int, default=30)
@@ -275,10 +289,10 @@ def main():
     collator = LevTCollator(max_length=args.max_seq_len)
 
     train_loader = DataLoader(
-        train_ds, batch_sampler=train_sampler, collate_fn=collator, num_workers=4,
+        train_ds, batch_sampler=train_sampler, collate_fn=collator, num_workers=_dataloader_workers(4),
     )
     val_loader = DataLoader(
-        val_ds, batch_size=args.batch_size, collate_fn=collator, num_workers=2,
+        val_ds, batch_size=args.batch_size, collate_fn=collator, num_workers=_dataloader_workers(2),
         shuffle=False,
     )
 

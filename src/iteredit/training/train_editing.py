@@ -40,6 +40,20 @@ from data.dataset_editing import (
 )
 
 
+def _dataloader_workers(requested):
+    """Number of DataLoader workers that is safe on this platform.
+
+    The per-scheme modules are loaded by path (importlib / sys.modules
+    juggling), so their classes cannot be pickled into workers started with
+    the "spawn" method (macOS, Windows). Fall back to in-process loading
+    there; Linux uses "fork" and keeps the workers.
+    """
+    import multiprocessing
+    if multiprocessing.get_start_method(allow_none=False) != 'fork':
+        return 0
+    return requested
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Train LevT Editing')
     parser.add_argument('--scheme', type=str, default='A', choices=['A', 'B', 'C', 'D'])
@@ -53,6 +67,10 @@ def parse_args():
     parser.add_argument('--max_insert', type=int, default=20)
     parser.add_argument('--data_dir', type=str, default=DATA_DIR)
     parser.add_argument('--output_dir', type=str, default='LevT_training_results/editing_v2/scheme_a')
+    parser.add_argument('--pretrained_bert', type=str, default=None,
+                        help='Music BERT MLM checkpoint directory to initialize the '
+                             'shared encoder from (paper: IterEdit starts from the '
+                             'pre-trained backbone)')
     parser.add_argument('--checkpoint', type=str, default=None,
                         help='Vanilla checkpoint to initialize from')
     parser.add_argument('--w_del', type=float, default=1.0)
@@ -244,10 +262,10 @@ def main():
     collator = LevTEditingCollator(pad_token_id=tok['pad'], max_length=args.max_seq_len)
 
     train_loader = DataLoader(
-        train_ds, batch_sampler=train_sampler, collate_fn=collator, num_workers=4,
+        train_ds, batch_sampler=train_sampler, collate_fn=collator, num_workers=_dataloader_workers(4),
     )
     val_loader = DataLoader(
-        val_ds, batch_size=args.batch_size, collate_fn=collator, num_workers=2,
+        val_ds, batch_size=args.batch_size, collate_fn=collator, num_workers=_dataloader_workers(2),
         shuffle=False,
     )
 
@@ -261,6 +279,11 @@ def main():
         plh_token_id=tok['plh'],
     )
     model = LevenshteinTransformer(model_config)
+
+    if args.pretrained_bert:
+        model.load_pretrained_bert(args.pretrained_bert)
+        if accelerator.is_main_process:
+            print(f"Initialized encoder from {args.pretrained_bert}")
 
     # Load vanilla checkpoint (weights only, not optimizer state)
     if args.checkpoint:

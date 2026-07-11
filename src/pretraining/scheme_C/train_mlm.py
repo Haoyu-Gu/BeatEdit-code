@@ -46,6 +46,9 @@ def build_model(token_config: MusicTokenConfig, bert_config: BertPretrainConfig)
 
 def train():
     parser = argparse.ArgumentParser(description='Music BERT MLM Pre-training (with_pair)')
+    parser.add_argument('--data_dir', type=str, default=None,
+                        help='directory of preprocessed .npz files '
+                             '(overrides BEATEDIT_DATA_DIR and the config default)')
     parser.add_argument('--epochs', type=int, default=None)
     parser.add_argument('--batch_size', type=int, default=None)
     parser.add_argument('--lr', type=float, default=None)
@@ -59,6 +62,8 @@ def train():
     token_config = MusicTokenConfig()
     bert_config = BertPretrainConfig()
 
+    if args.data_dir is not None:
+        bert_config.data_dir = args.data_dir
     if args.epochs is not None:
         bert_config.num_epochs = args.epochs
     if args.batch_size is not None:
@@ -71,6 +76,11 @@ def train():
         bert_config.gradient_accumulation_steps = args.grad_accum
 
     # Accelerator
+    # fp16 needs CUDA; fall back to full precision on CPU/MPS so a small
+    # pilot run works anywhere (override with BEATEDIT_PRECISION).
+    if bert_config.mixed_precision == "fp16" and not torch.cuda.is_available():
+        bert_config.mixed_precision = "no"
+
     accelerator = Accelerator(
         mixed_precision=bert_config.mixed_precision,
         gradient_accumulation_steps=bert_config.gradient_accumulation_steps,

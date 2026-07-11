@@ -9,6 +9,7 @@ Encoding scheme: absolute_bundled encoding (vocab=7145 with MASK)
 FELIX label space: 11 token-level labels (KEEP/DELETE/REPLACE/APPEND_1..8)
 """
 
+import os
 from dataclasses import dataclass, field
 from typing import Tuple
 
@@ -141,10 +142,10 @@ def decode_felix_label(label_id):
 class TaggerConfig:
     """Tagger model hyperparameters (Transformer Encoder + per-token classification)."""
     vocab_size: int = VOCAB_SIZE
-    hidden_size: int = 512
-    num_hidden_layers: int = 8
-    num_attention_heads: int = 8
-    intermediate_size: int = 2048
+    hidden_size: int = int(os.environ.get("BEATEDIT_HIDDEN", 512))
+    num_hidden_layers: int = int(os.environ.get("BEATEDIT_LAYERS", 8))
+    num_attention_heads: int = int(os.environ.get("BEATEDIT_HEADS", 8))
+    intermediate_size: int = int(os.environ.get("BEATEDIT_FFN", 2048))
     max_position_embeddings: int = 2048
     dropout: float = 0.1
     num_labels: int = NUM_FELIX_LABELS
@@ -154,10 +155,10 @@ class TaggerConfig:
 class InserterConfig:
     """Inserter model hyperparameters (MLM-style)."""
     vocab_size: int = VOCAB_SIZE
-    hidden_size: int = 512
-    num_hidden_layers: int = 8
-    num_attention_heads: int = 8
-    intermediate_size: int = 2048
+    hidden_size: int = int(os.environ.get("BEATEDIT_HIDDEN", 512))
+    num_hidden_layers: int = int(os.environ.get("BEATEDIT_LAYERS", 8))
+    num_attention_heads: int = int(os.environ.get("BEATEDIT_HEADS", 8))
+    intermediate_size: int = int(os.environ.get("BEATEDIT_FFN", 2048))
     max_position_embeddings: int = 2048
     dropout: float = 0.1
 

@@ -24,12 +24,16 @@ cd "src/seqtag/scheme_$SCHEME"
 
 # Stage I: Synthetic error training (freeze BERT for 2 epochs, then fine-tune)
 echo "--- Stage I: Synthetic error training ---"
+S1_OUT="$OUTPUT_BASE/scheme_$SCHEME/stage1"
+S3_OUT="$OUTPUT_BASE/scheme_$SCHEME/stage3"
+
 accelerate launch train_gector.py \
     --stage 1 \
     --data_dir "$DATA_DIR" \
     --bert_checkpoint "$BERT_CKPT" \
-    --epochs 20 \
-    --batch_size 32 \
+    --output_dir "$S1_OUT" \
+    --epochs "${BEATEDIT_EPOCHS:-20}" \
+    --batch_size "${BEATEDIT_BATCH:-32}" \
     --freeze_epochs 2 \
     --cold_lr 1e-3 \
     --lr_bert 1e-5 \
@@ -39,8 +43,14 @@ accelerate launch train_gector.py \
     --keep_weight 0.15 \
     --lambda_detect 0.5
 
-S1_CKPT=$(ls -t checkpoints/*/best_model.pt 2>/dev/null | head -1)
-echo "Stage I best checkpoint: $S1_CKPT"
+# train_gector.py saves <output_dir>/{best_model,final_model}/model.pt; prefer the best.
+if [ -f "$S1_OUT/best_model/model.pt" ]; then
+    S1_CKPT="$S1_OUT/best_model"
+else
+    S1_CKPT="$S1_OUT/final_model"
+fi
+[ -f "$S1_CKPT/model.pt" ] || { echo "Stage I produced no checkpoint in $S1_OUT" >&2; exit 1; }
+echo "Stage I checkpoint: $S1_CKPT"
 
 # Stage III: Clean mixing fine-tuning
 echo "--- Stage III: Clean mixing ---"
@@ -48,12 +58,14 @@ accelerate launch train_gector.py \
     --stage 3 \
     --data_dir "$DATA_DIR" \
     --checkpoint "$S1_CKPT" \
-    --epochs 3 \
-    --batch_size 32 \
+    --output_dir "$S3_OUT" \
+    --epochs "${BEATEDIT_STAGE3_EPOCHS:-3}" \
+    --batch_size "${BEATEDIT_BATCH:-32}" \
     --lr 5e-6 \
     --clean_ratio 0.25
 
 echo "=== SeqTag Scheme $SCHEME training complete ==="
+echo "Checkpoint: $S3_OUT"
 
 # To train all 4 schemes:
 # for s in A B C D; do SCHEME=$s bash scripts/03_train_seqtag.sh; done

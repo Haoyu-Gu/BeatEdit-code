@@ -48,6 +48,15 @@ BERT_CHECKPOINT = os.path.join(
 )
 
 
+# fp16 needs CUDA; fall back to full precision elsewhere so a small pilot run
+# works on CPU/MPS. Override with BEATEDIT_PRECISION=no|fp16|bf16.
+def _resolve_precision(configured='fp16'):
+    requested = os.environ.get('BEATEDIT_PRECISION', configured)
+    if requested in ('fp16', 'bf16') and not torch.cuda.is_available():
+        return 'no'
+    return requested
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Music GECToR Training (no_pair)')
     # Stage
@@ -192,7 +201,7 @@ def train():
 
     # Accelerator
     accelerator = Accelerator(
-        mixed_precision='fp16',
+        mixed_precision=_resolve_precision(),
         gradient_accumulation_steps=args.gradient_accumulation,
     )
     set_seed(args.seed)

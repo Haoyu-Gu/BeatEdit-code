@@ -5,6 +5,7 @@ Imports PianoRollTokenizer from the Scheme C encoding module via importlib.
 """
 
 import os
+import sys
 import importlib.util
 
 # Import PianoRollTokenizer from src/encoding/scheme_C
@@ -15,6 +16,9 @@ _spec = importlib.util.spec_from_file_location(
     os.path.join(_MUSIC_BERT_DIR, "my_tokenizer.py"),
 )
 _mod = importlib.util.module_from_spec(_spec)
+# Register the module so DataLoader workers (spawn start method) can
+# unpickle classes defined in it.
+sys.modules[_spec.name] = _mod
 _spec.loader.exec_module(_mod)
 PianoRollTokenizer = _mod.PianoRollTokenizer
 

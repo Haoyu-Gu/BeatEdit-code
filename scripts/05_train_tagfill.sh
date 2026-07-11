@@ -30,8 +30,8 @@ accelerate launch training/train_tagger.py \
     --data_dir "$DATA_DIR" \
     --pretrained_bert "$BERT_CKPT" \
     --output_dir "$OUTPUT_BASE/scheme_$SCHEME/tagger" \
-    --epochs 30 \
-    --batch_size 32 \
+    --epochs "${BEATEDIT_EPOCHS:-30}" \
+    --batch_size "${BEATEDIT_BATCH:-32}" \
     --gradient_accumulation 3 \
     --lr 1e-4 \
     --weight_decay 0.01 \
@@ -45,8 +45,8 @@ accelerate launch training/train_inserter.py \
     --data_dir "$DATA_DIR" \
     --pretrained_bert "$BERT_CKPT" \
     --output_dir "$OUTPUT_BASE/scheme_$SCHEME/inserter" \
-    --epochs 30 \
-    --batch_size 32 \
+    --epochs "${BEATEDIT_EPOCHS:-30}" \
+    --batch_size "${BEATEDIT_BATCH:-32}" \
     --gradient_accumulation 3 \
     --lr 1e-4 \
     --weight_decay 0.01 \

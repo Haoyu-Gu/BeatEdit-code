@@ -21,12 +21,18 @@ echo "=== BERT MLM Pre-training: Scheme $SCHEME ==="
 
 cd "src/pretraining/scheme_$SCHEME"
 
+# Paper defaults; override with the BEATEDIT_* environment variables
+# (e.g. BEATEDIT_EPOCHS=1 BEATEDIT_LAYERS=4 for a quick pilot run).
+EPOCHS="${BEATEDIT_EPOCHS:-30}"
+BATCH="${BEATEDIT_BATCH:-64}"
+LR="${BEATEDIT_LR:-1e-4}"
+
 accelerate launch train_mlm.py \
     --data_dir "$DATA_DIR" \
     --output_dir "$OUTPUT_BASE/scheme_$SCHEME" \
-    --epochs 30 \
-    --batch_size 64 \
-    --lr 1e-4 \
+    --epochs "$EPOCHS" \
+    --batch_size "$BATCH" \
+    --lr "$LR" \
     --tb_log_dir "$OUTPUT_BASE/scheme_$SCHEME/logs"
 
 echo "=== BERT Scheme $SCHEME pre-training complete ==="

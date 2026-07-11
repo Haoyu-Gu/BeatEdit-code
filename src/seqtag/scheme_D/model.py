@@ -17,14 +17,25 @@ from config import (
 )
 
 
+def _env_int(name, default):
+    """Backbone size knobs shared with pre-training (see README).
+
+    The backbone must match the checkpoint the model is initialized from, so
+    the same BEATEDIT_* variables are read here and in
+    src/pretraining/scheme_*/config.py.
+    """
+    import os
+    return int(os.environ.get(name, default))
+
+
 def get_bert_config():
     """Create BERT config matching the pretrained Music BERT (absolute_bundled)."""
     return BertConfig(
         vocab_size=VOCAB_SIZE,
-        hidden_size=512,
-        num_hidden_layers=8,
-        num_attention_heads=8,
-        intermediate_size=2048,
+        hidden_size=_env_int("BEATEDIT_HIDDEN", 512),
+        num_hidden_layers=_env_int("BEATEDIT_LAYERS", 8),
+        num_attention_heads=_env_int("BEATEDIT_HEADS", 8),
+        intermediate_size=_env_int("BEATEDIT_FFN", 2048),
         max_position_embeddings=2048,
         hidden_dropout_prob=0.1,
         attention_probs_dropout_prob=0.1,
