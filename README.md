@@ -304,7 +304,10 @@ Qi Liu<sup>1,\*</sup>, Shuai Wang<sup>2,\*</sup>
   title     = {BeatEdit: Symbolic Music Generation as Explicit Editing},
   author    = {Gu, Haoyu and Qian, Lekai and Zhou, Haowu and Liu, Qi and Wang, Shuai},
   booktitle = {Proceedings of the 34th ACM International Conference on Multimedia},
-  year      = {2026}
+  year      = {2026},
+  eprint    = {2607.11124},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.SD}
 }
 ```
 
