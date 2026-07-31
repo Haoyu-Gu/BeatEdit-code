@@ -2,7 +2,8 @@
 
 Official implementation for the ACM Multimedia 2026 paper. 
 
-- **Paper** (arXiv): https://arxiv.org/abs/2607.11124
+- **Paper** (arXiv, extended version with Appendices A–P): https://arxiv.org/abs/2607.11124
+- **Supplementary material** (Appendices A–P as a standalone PDF): [supplementary.pdf](supplementary.pdf)
 - **Demo page** (audio samples, piano rolls, MIDI player): https://haoyu-gu.github.io/BeatEdit/
 - Demo repository: https://github.com/Haoyu-Gu/BeatEdit
 
