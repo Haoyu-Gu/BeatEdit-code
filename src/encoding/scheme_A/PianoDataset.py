@@ -28,7 +28,7 @@ class PianoDataset(Dataset):
     """Length-aware dataset."""
 
     def __init__(self, data_dir, config, cache_lengths=True, mode='train',
-                 test_split_ratio=0.05, random_seed=42):
+                 test_split_ratio=0.10, random_seed=42, validation_split_ratio=0.10):
         """
         Args:
             data_dir: data directory.
@@ -57,6 +57,7 @@ class PianoDataset(Dataset):
 
         self.mode = mode
         self.test_split_ratio = test_split_ratio
+        self.validation_split_ratio = validation_split_ratio
         self.random_seed = random_seed
 
         self.config = config
@@ -109,52 +110,35 @@ class PianoDataset(Dataset):
         self._split_train_test()
 
     def _split_train_test(self):
-        """Split into train and test according to the mode argument."""
+        """Split songs 80/10/10 before length filtering or augmentation."""
         total_files = len(self.data_files)
-
-        # Set the random seed for reproducibility
-        rng = np.random.RandomState(self.random_seed)
-
-        # Create an index array and shuffle it
-        indices = np.arange(total_files)
-        rng.shuffle(indices)  # only affects the shuffle here
-
-
-        # Compute the test-set size
-        test_size = int(total_files * self.test_split_ratio)
-        train_size = total_files - test_size
-
+        val_ratio = self.validation_split_ratio
+        test_ratio = self.test_split_ratio
+        if not (0 < val_ratio < 1 and 0 < test_ratio < 1 and val_ratio + test_ratio < 1):
+            raise ValueError("Invalid train/validation/test split ratios")
+        indices = np.array(sorted(range(total_files), key=lambda i: self.data_files[i]))
+        np.random.RandomState(self.random_seed).shuffle(indices)
+        val_size = int(total_files * val_ratio)
+        test_size = int(total_files * test_ratio)
+        train_size = total_files - val_size - test_size
+        if self.mode != 'all' and min(train_size, val_size, test_size) < 1:
+            raise ValueError("Not enough songs for non-empty train/validation/test splits")
+        partitions = {
+            'train': indices[:train_size],
+            'validation': indices[train_size:train_size + val_size],
+            'test': indices[train_size + val_size:],
+            'all': indices,
+            'toy': indices[:min(4000, train_size)],
+        }
+        if self.mode not in partitions:
+            raise ValueError(f"Unknown dataset mode: {self.mode}")
+        selected_indices = partitions[self.mode]
+        # Filtering must not move songs between partitions or encoding schemes.
         if self.config.min_length > 0:
-            # Filter samples by length
-            filtered_indices = []
-            for i in indices:
-                length = self.file_lengths[i]
-                if length > self.config.min_length:
-                    filtered_indices.append(i)
-            indices = np.array(filtered_indices)
-            total_files = len(indices)
-            test_size = int(total_files * self.test_split_ratio)
-            train_size = total_files - test_size
-            print(f"{total_files} files remaining after filtering")
-
-        if self.mode == 'train':
-            # Use the first train_size samples as the training set
-            selected_indices = indices[:train_size]
-            print(f"Using training set: {len(selected_indices)} files ({train_size}/{total_files})")
-        elif self.mode == 'test':
-            # Use the last test_size samples as the test set
-            selected_indices = indices[train_size:]
-            print(f"Using test set: {len(selected_indices)} files ({test_size}/{total_files})")
-        elif self.mode == 'all':
-            # Use all data
-            selected_indices = indices
-            print(f"Using all data: {len(selected_indices)} files ({total_files}/{total_files})")
-        elif self.mode == 'toy':
-            # Use a small subset
-            selected_indices = indices[:4000]
-            print(f"Using validation data: {len(selected_indices)} files ({4000}/{total_files})")
-        else:
-            raise ValueError(f"mode must be 'train', 'test', or 'all'; got: {self.mode}")
+            if self.file_lengths is None:
+                raise ValueError("Length filtering requires the length cache")
+            selected_indices = [i for i in selected_indices
+                                if self.file_lengths[i] > self.config.min_length]
 
         # Update data_files and the related indices
         self.data_files = [self.data_files[i] for i in selected_indices]

@@ -22,6 +22,8 @@ set -e
 DATA_DIR="${DATA_DIR:?Set DATA_DIR to your preprocessed npz directory}"
 BERT_CKPT="${BERT_CKPT:?Set BERT_CKPT to pretrained BERT checkpoint path}"
 OUTPUT_BASE="${OUTPUT_BASE:-./checkpoints/iteredit}"
+SCHEME="${SCHEME:-A}"
+case "$SCHEME" in A|B|C|D) ;; *) echo "Invalid SCHEME: $SCHEME" >&2; exit 1;; esac
 
 echo "=== IterEdit Training ==="
 
@@ -36,26 +38,26 @@ cd "src/iteredit"
 
 # Main training (inpainting mode — used for completion task)
 echo "--- Training: Inpainting mode ---"
-accelerate launch training/train.py \
+accelerate launch --num_processes 1 training/train_accomp_inpainting.py \
+    --scheme "$SCHEME" \
     --data_dir "$DATA_DIR" \
     --pretrained_bert "$BERT_CKPT" \
-    --output_dir "$OUTPUT_BASE/inpainting" \
+    --output_dir "$OUTPUT_BASE/scheme_$SCHEME/inpainting" \
     --epochs "${BEATEDIT_EPOCHS:-30}" \
     --batch_size "${BEATEDIT_BATCH:-32}" \
     --gradient_accumulation 2 \
     --lr 3e-4 \
     --weight_decay 0.01 \
     --warmup_ratio 0.10 \
-    --label_smoothing 0.1 \
-    --mask_ratio_min 0.125 \
-    --mask_ratio_max 0.5
+    --label_smoothing 0.1
 
 # Editing mode training (used for accompaniment editing task)
 echo "--- Training: Editing mode ---"
-accelerate launch training/train_editing.py \
+accelerate launch --num_processes 1 training/train_editing.py \
+    --scheme "$SCHEME" \
     --data_dir "$DATA_DIR" \
     --pretrained_bert "$BERT_CKPT" \
-    --output_dir "$OUTPUT_BASE/editing" \
+    --output_dir "$OUTPUT_BASE/scheme_$SCHEME/editing" \
     --epochs "${BEATEDIT_EPOCHS:-30}" \
     --batch_size "${BEATEDIT_BATCH:-32}" \
     --gradient_accumulation 2 \

@@ -59,7 +59,7 @@ def parse_args():
     parser.add_argument('--epochs', type=int, default=30)
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--gradient_accumulation', type=int, default=2)
-    parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--lr', type=float, default=3e-4)
     parser.add_argument('--weight_decay', type=float, default=0.01)
     parser.add_argument('--warmup_ratio', type=float, default=0.10)
     parser.add_argument('--max_seq_len', type=int, default=2048)
@@ -292,7 +292,7 @@ def main():
         state_dict = ckpt.get('model_state_dict', ckpt)
         # Remove track_bias if present (vanilla shouldn't have it)
         state_dict.pop('track_bias', None)
-        missing, unexpected = model.load_state_dict(state_dict, strict=False)
+        missing, unexpected = model.load_state_dict(state_dict, strict=True)
         if accelerator.is_main_process:
             if missing:
                 print(f"  Missing keys: {missing}")

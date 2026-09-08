@@ -3,6 +3,8 @@ import ast
 import contextlib
 import io
 import json
+import os
+import shlex
 from pathlib import Path
 import subprocess
 import tempfile
@@ -15,6 +17,91 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleaseProtocolTests(unittest.TestCase):
+    def test_evaluation_script_cli_contract(self):
+        script = (ROOT / 'scripts/06_evaluate_all.sh').read_text().replace('\\\n', ' ')
+        checked = 0
+        for line in script.splitlines():
+            if not line.strip().startswith('"$PYTHON"'):
+                continue
+            tokens = shlex.split(line)
+            path = ROOT / tokens[1].replace('$REPO_DIR/', '')
+            tree = ast.parse(path.read_text())
+            allowed = {arg.value for n in ast.walk(tree) if isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Attribute) and n.func.attr == 'add_argument'
+                for arg in n.args if isinstance(arg, ast.Constant) and isinstance(arg.value, str)}
+            passed = {t for t in tokens[2:] if t.startswith('--')}
+            self.assertFalse(passed - allowed, f'{path}: {passed - allowed}')
+            checked += 1
+        self.assertEqual(checked, 2)
+
+    def test_linear_prediction_heads(self):
+        import torch
+        from torch import nn
+        cases = []
+        for scheme in 'ABCD':
+            base = ROOT / f'src/tagfill/scheme_{scheme}/models'
+            cases += [(base / 'tagger.py', 'classifier', 512, 11),
+                      (base / 'inserter.py', 'mlm_head', 512, 186 if scheme == 'A' else 185 if scheme == 'B' else 7145)]
+        base = ROOT / 'src/iteredit/models/levenshtein_transformer.py'
+        cases += [(base, 'del_head', 512, 2), (base, 'ins_head', 1024, 21),
+                  (base, 'tok_head', 512, 7145)]
+        for path, name, in_dim, out_dim in cases:
+            tree = ast.parse(path.read_text())
+            assignment = next(n for n in ast.walk(tree) if isinstance(n, ast.Assign)
+                and any(isinstance(t, ast.Attribute) and t.attr == name for t in n.targets))
+            obj = SimpleNamespace()
+            config = SimpleNamespace(hidden_size=512, num_labels=11, vocab_size=out_dim, max_insert=20)
+            namespace = {'nn': nn, 'self': obj, 'config': config, 'hidden_size': 512}
+            exec(compile(ast.Module(body=[assignment], type_ignores=[]), str(path), 'exec'), namespace)
+            head = getattr(obj, name)
+            self.assertIsInstance(head, nn.Linear)
+            output = head(torch.zeros(2, 3, in_dim))
+            self.assertEqual(tuple(output.shape), (2, 3, out_dim))
+            output.sum().backward()
+            self.assertIsNotNone(head.weight.grad)
+
+    def test_downstream_partitions_match_mlm(self):
+        paths = list((ROOT / 'src').rglob('dataset.py'))
+        paths += [ROOT / 'src/iteredit/data/dataset_editing.py']
+        expected = np.arange(100)
+        np.random.RandomState(42).shuffle(expected)
+        expected = [list(expected[:80]), list(expected[80:90]), list(expected[90:])]
+        checked = 0
+        with tempfile.TemporaryDirectory() as tmp:
+            for i in range(100):
+                for ext in ('npz', 'mid'):
+                    Path(tmp, f'song_{i:04}.{ext}').touch()
+            for path in paths:
+                tree = ast.parse(path.read_text())
+                methods = [n for n in tree.body if isinstance(n, ast.FunctionDef)
+                           and n.name == 'get_file_lists']
+                if not methods:
+                    continue
+                namespace = {'np': np, 'os': os, 'DATA_DIR': tmp, 'MIDI_DATA_DIR': tmp}
+                exec(compile(ast.Module(body=methods, type_ignores=[]), str(path), 'exec'), namespace)
+                result = namespace['get_file_lists'](tmp)
+                ids = [[int(Path(f).stem.split('_')[1]) for f in part] for part in result]
+                self.assertEqual(ids, expected, str(path))
+                with self.assertRaises(ValueError):
+                    namespace['get_file_lists'](tmp, test_ratio=0)
+                checked += 1
+            self.assertEqual(checked, 12)
+
+    def test_legacy_encoding_partitions(self):
+        for scheme in 'ABCD':
+            path = ROOT / f'src/encoding/scheme_{scheme}/PianoDataset.py'
+            tree = ast.parse(path.read_text())
+            method = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)
+                          and n.name == '_split_train_test')
+            namespace = {'np': np}
+            exec(compile(ast.Module(body=[method], type_ignores=[]), str(path), 'exec'), namespace)
+            for mode, count in [('train', 80), ('validation', 10), ('test', 10)]:
+                obj = SimpleNamespace(data_files=[f'song_{i:04}.npz' for i in reversed(range(100))],
+                    file_lengths=None, config=SimpleNamespace(min_length=0), mode=mode,
+                    random_seed=42, validation_split_ratio=.1, test_split_ratio=.1)
+                namespace['_split_train_test'](obj)
+                self.assertEqual(len(obj.data_files), count)
+
     def test_mlm_partitions(self):
         # Execute the actual split method without loading Torch/tokenizers.
         expected = None

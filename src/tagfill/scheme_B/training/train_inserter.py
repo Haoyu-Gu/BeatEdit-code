@@ -98,7 +98,8 @@ def compute_inserter_loss(logits, mask_targets, mask_positions):
     valid_logits = logits[valid]       # (num_valid, V)
     valid_targets = mask_targets[valid]  # (num_valid,)
 
-    loss = F.cross_entropy(valid_logits, valid_targets, ignore_index=PAD_TOKEN)
+    loss = F.cross_entropy(valid_logits, valid_targets, ignore_index=PAD_TOKEN,
+                           label_smoothing=0.1)
     return loss
 
 

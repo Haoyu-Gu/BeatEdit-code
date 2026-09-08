@@ -347,7 +347,7 @@ class BucketBatchSampler(Sampler):
         )
 
 
-def get_file_lists(data_dir=DATA_DIR, test_ratio=0.05, val_ratio=0.05, seed=42):
+def get_file_lists(data_dir=DATA_DIR, test_ratio=0.10, val_ratio=0.10, seed=42):
     """
     Split npz files into train/val/test sets.
 
@@ -361,6 +361,10 @@ def get_file_lists(data_dir=DATA_DIR, test_ratio=0.05, val_ratio=0.05, seed=42):
 
     test_size = int(len(all_files) * test_ratio)
     val_size = int(len(all_files) * val_ratio)
+    if not (0 < test_ratio < 1 and 0 < val_ratio < 1 and test_ratio + val_ratio < 1):
+        raise ValueError("Invalid train/validation/test split ratios")
+    if min(test_size, val_size, len(all_files) - test_size - val_size) < 1:
+        raise ValueError("Not enough songs for non-empty train/validation/test splits")
     train_size = len(all_files) - test_size - val_size
 
     train_files = [all_files[i] for i in indices[:train_size]]

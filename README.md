@@ -123,11 +123,14 @@ selects `best_model`; reserve the test partition for final evaluation.
 
 ### 3. Training Pipeline
 
-Training follows a strict dependency order:
+Training follows a strict dependency order. TagFill and IterEdit use the single-linear
+prediction heads specified in Appendix D; IterEdit applies pre-norm blocks with
+Music BERT parameter initialization. Earlier task checkpoints with multi-layer heads
+or post-norm IterEdit require retraining; task checkpoint loading is strict.
 
 ```
 BERT Pre-training (§3.1)
-    ├── SeqTag (§3.2)      — Stage I (frozen) → Stage III (clean mixing)
+    ├── SeqTag (§3.2)      — 2 epochs frozen → 18 epochs full fine-tuning
     ├── IterEdit (§3.3)    — inpainting mode + editing mode
     └── TagFill (§3.4)     — tagger (Focal Loss) → inserter (BERT-init MLM)
 ```
@@ -145,13 +148,16 @@ done
 BERT_A=checkpoints/bert/scheme_A/best_model
 BERT_D=checkpoints/bert/scheme_D/best_model
 
+# Scripts 02-05 use one process by default: effective batch = batch × accumulation.
+# Changing process count also changes the global batch; adjust accumulation accordingly.
+
 SCHEME=A DATA_DIR=/path/to/data/npz BERT_CKPT=$BERT_A \
-    bash scripts/03_train_seqtag.sh      # Stage I -> Stage III
+    bash scripts/03_train_seqtag.sh      # frozen encoder -> full fine-tuning
 
 SCHEME=A DATA_DIR=/path/to/data/npz BERT_CKPT=$BERT_A \
     bash scripts/05_train_tagfill.sh     # tagger -> inserter
 
-DATA_DIR=/path/to/data/npz BERT_CKPT=$BERT_D \
+SCHEME=D DATA_DIR=/path/to/data/npz BERT_CKPT=$BERT_D \
     bash scripts/04_train_iteredit.sh    # inpainting -> editing
 ```
 
@@ -168,6 +174,12 @@ model has to match the checkpoint it is initialized from. fp16 is downgraded
 automatically when CUDA is unavailable (`BEATEDIT_PRECISION` overrides).
 
 ### 4. Evaluation
+
+Step 6 reads prepared test cases and model predictions; it does not run inference.
+Set `TEST_DATA_DIR`, `PREDICTIONS_DIR`, and `RESULTS_DIR` as needed. It requires
+200 test cases and matching predictions per requested task/encoding/method,
+and pretrained BERT weights for full-sequence FMD.
+
 ```bash
 bash scripts/06_evaluate_all.sh     # Run metrics + significance tests
 bash scripts/07_generate_tables.sh  # Generate per-task Markdown summaries
@@ -189,7 +201,7 @@ out-of-region beats preserved verbatim (100%), zero violations,
 make setup      # create .venv, install deps, run smoke tests
 make demo       # side-by-side encoding of the same piece under schemes A-D
 make verify     # syntax check + encoding tests + Appendix E/F validity check
-make pipeline SCHEME=A DATA_DIR=/path/to/data   # full pipeline for one scheme
+make pipeline SCHEME=A DATA_DIR=/path/to/data   # train all methods for one scheme
 ```
 
 `tools/encoding_demo.py` encodes any note spec under all four schemes and
@@ -251,7 +263,6 @@ in `src/iteredit/data/levenshtein_utils.py` are ported from
 |-----------|----|-------------|--------|-----------|----------|
 | BERT Pre-training | 1e-4 | 256 | 30 | AdamW (wd=0.01) | Cosine + 10% warmup |
 | SeqTag Stage I | 1e-5 (BERT) / 1e-4 (head) | 64 | 20 | AdamW | Cosine + 10% warmup |
-| SeqTag Stage III | 5e-6 | 64 | 3 | AdamW | Cosine + 10% warmup |
 | IterEdit | 3e-4 | 64 | 30 | AdamW (wd=0.01) | Cosine + 10% warmup |
 | TagFill Tagger | 1e-4 | 96 (32×3) | 30 | AdamW (wd=0.01) | Cosine + 10% warmup |
 | TagFill Inserter | 1e-4 | 96 (32×3) | 30 | AdamW (wd=0.01) | Cosine + 10% warmup |
@@ -264,7 +275,7 @@ in `src/iteredit/data/levenshtein_utils.py` are ported from
 
 Training time estimates (2x GPU):
 - BERT Pre-training: 4.6h (Scheme D) to 27.3h (Scheme B)
-- SeqTag: ~6-8h per scheme (Stage I) + ~1h (Stage III)
+- SeqTag: ~6-8h per scheme
 - IterEdit: ~10-15h
 - TagFill: ~8-10h per scheme (tagger) + ~8-10h (inserter)
 

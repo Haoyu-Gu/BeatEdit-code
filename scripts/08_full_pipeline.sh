@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # End-to-end pipeline for one encoding scheme:
-#   BERT pre-training -> SeqTag -> TagFill -> (Scheme D only) IterEdit -> evaluation.
+#   BERT pre-training -> SeqTag -> TagFill -> IterEdit (same encoding throughout).
+# Set RUN_EVALUATION=1 after preparing test cases and predictions for Step 6.
 #
 # Usage:
 #   SCHEME=A DATA_DIR=/path/to/data bash scripts/08_full_pipeline.sh
@@ -37,15 +38,14 @@ SCHEME="$SCHEME" DATA_DIR="$DATA_DIR" BERT_CKPT="$BERT_CKPT" bash scripts/03_tra
 echo "==> [3/5] TagFill"
 SCHEME="$SCHEME" DATA_DIR="$DATA_DIR" BERT_CKPT="$BERT_CKPT" bash scripts/05_train_tagfill.sh
 
-if [ "$SCHEME" = "D" ]; then
-    echo "==> [4/5] IterEdit (uses the Scheme D backbone)"
-    DATA_DIR="$DATA_DIR" BERT_CKPT="$BERT_CKPT" bash scripts/04_train_iteredit.sh
-else
-    echo "==> [4/5] IterEdit skipped (train it from Scheme D: SCHEME=D ... 04_train_iteredit.sh)"
-fi
+echo "==> [4/5] IterEdit (scheme ${SCHEME})"
+SCHEME="$SCHEME" DATA_DIR="$DATA_DIR" BERT_CKPT="$BERT_CKPT" bash scripts/04_train_iteredit.sh
 
-echo "==> [5/5] Evaluation + tables"
-bash scripts/06_evaluate_all.sh
-bash scripts/07_generate_tables.sh
+if [ "${RUN_EVALUATION:-0}" = 1 ]; then
+    echo "==> [5/5] Evaluation + tables"
+    SCHEMES="$SCHEME" bash scripts/06_evaluate_all.sh
+else
+    echo "Training finished. Prepare test cases and predictions, then run Step 6."
+fi
 
 echo "Pipeline finished for scheme ${SCHEME}."

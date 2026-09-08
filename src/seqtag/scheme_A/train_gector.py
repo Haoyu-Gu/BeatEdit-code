@@ -161,7 +161,7 @@ def create_optimizer(model, args, is_frozen):
 def create_datasets(args):
     """Create train and validation datasets."""
     train_files, val_files, _ = get_file_lists(
-        args.data_dir, test_ratio=0.05, val_ratio=0.05, seed=args.seed,
+        args.data_dir, test_ratio=0.10, val_ratio=0.10, seed=args.seed,
     )
 
     if args.max_samples:

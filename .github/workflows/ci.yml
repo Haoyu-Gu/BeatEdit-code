@@ -16,12 +16,16 @@ jobs:
       - name: Install dependencies (CPU torch)
         run: |
           pip install numpy torch --index-url https://download.pytorch.org/whl/cpu
-          pip install music21 pretty_midi
+          pip install music21 pretty_midi 'transformers>=4.40,<5'
       - name: Syntax check (all Python files)
         run: python -m compileall -q src evaluation tools tests data_prep
       - name: Encoding tests (schemes A-D)
         run: python tests/test_encoding.py
       - name: Preprocessing tests (score -> npz -> tokens -> MIDI)
         run: python tests/test_data_prep.py
+      - name: Release protocol regression tests
+        run: python tests/test_release_protocol.py
+      - name: IterEdit pre-norm model smoke test
+        run: python tests/test_iteredit_model.py
       - name: Encoding demo
         run: python tools/encoding_demo.py

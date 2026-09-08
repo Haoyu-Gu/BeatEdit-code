@@ -9,7 +9,7 @@ Output: predicted token IDs for each MASK position
 
 Architecture:
   BertModel (pre-trained, shared backbone)
-  → MLM Head (Linear → GELU → LayerNorm → Linear → vocab_size)
+  → Linear prediction head (hidden_size → vocab_size)
   Applied at MASK positions only.
 """
 
@@ -55,12 +55,7 @@ class FELIXInserter(nn.Module):
         self.bert = BertModel(bert_config, add_pooling_layer=False)
 
         # MLM prediction head
-        self.mlm_head = nn.Sequential(
-            nn.Linear(config.hidden_size, config.hidden_size),
-            nn.GELU(),
-            nn.LayerNorm(config.hidden_size),
-            nn.Linear(config.hidden_size, config.vocab_size),
-        )
+        self.mlm_head = nn.Linear(config.hidden_size, config.vocab_size)
 
         self._init_head_weights()
 

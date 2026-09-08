@@ -257,6 +257,8 @@ def main():
                         help='Include per-sample scores in output JSON')
     parser.add_argument('--no_ci', action='store_true',
                         help='Skip confidence interval computation')
+    parser.add_argument('--strict', action='store_true',
+                        help='Require all requested inputs and successful evaluation of 200 samples per cell')
     parser.add_argument('--n_bootstrap', type=int, default=1000,
                         help='Number of bootstrap resamples for CI (default: 1000)')
     args = parser.parse_args()
@@ -269,6 +271,17 @@ def main():
 
     schemes = [s.strip().upper() for s in args.schemes.split(',')]
     methods = [m.strip() for m in args.methods.split(',')]
+    if args.strict:
+        for scheme in schemes:
+            targets = glob.glob(os.path.join(args.test_data_dir, scheme, '*.json'))
+            if len(targets) != 200:
+                parser.error(f'{scheme}: expected 200 test cases, found {len(targets)}')
+            for method in methods:
+                pred_dir = os.path.join(args.predictions_dir, method, scheme)
+                missing = [p for p in targets if not os.path.isfile(
+                    os.path.join(pred_dir, os.path.basename(p)))]
+                if missing:
+                    parser.error(f'{method}/{scheme}: missing {len(missing)} predictions')
     os.makedirs(args.output_dir, exist_ok=True)
 
     print(f"Unified Evaluation")
@@ -307,6 +320,8 @@ def main():
             )
 
             if result is not None:
+                if args.strict and (result['num_samples'] != 200 or result['num_errors']):
+                    parser.error(f'{method}/{scheme}: incomplete evaluation')
                 all_results.append(result)
 
                 # Print summary
@@ -333,6 +348,8 @@ def main():
             del bert_model
             torch.cuda.empty_cache()
 
+    if not all_results:
+        parser.error('No predictions were evaluated')
     # Save combined results
     combined_path = os.path.join(args.output_dir, f'{args.task}_all_results_{args.scope}.json')
     with open(combined_path, 'w') as f:

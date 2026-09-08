@@ -50,11 +50,7 @@ class FELIXTagger(nn.Module):
         self.bert = BertModel(bert_config, add_pooling_layer=False)
 
         # Per-token classification head
-        self.classifier = nn.Sequential(
-            nn.LayerNorm(config.hidden_size),
-            nn.Dropout(config.dropout),
-            nn.Linear(config.hidden_size, config.num_labels),
-        )
+        self.classifier = nn.Linear(config.hidden_size, config.num_labels)
 
         self._init_head_weights()
 

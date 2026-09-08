@@ -116,8 +116,8 @@ def test_roundtrip_to_midi(tmp):
         _convert(xml, npz_dir)
 
     cfg = ModelConfig()
-    dataset = PianoDataset(npz_dir, cfg, cache_lengths=False, mode='train',
-                           test_split_ratio=0.0)
+    # This test converts one score; it does not train or select a data split.
+    dataset = PianoDataset(npz_dir, cfg, cache_lengths=False, mode='all')
     tokens = dataset[0]['input_ids'].numpy()
 
     tokenizer = PianoRollTokenizer(patch_h=cfg.patch_h, patch_w=cfg.patch_w,

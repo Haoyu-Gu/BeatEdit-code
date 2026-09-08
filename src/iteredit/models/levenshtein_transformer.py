@@ -57,27 +57,14 @@ class LevenshteinTransformer(nn.Module):
         hidden_size = config.hidden_size
 
         # Head 1: Deletion classifier (per token, binary)
-        self.del_head = nn.Sequential(
-            nn.LayerNorm(hidden_size),
-            nn.Dropout(config.dropout),
-            nn.Linear(hidden_size, 2),  # 0=KEEP, 1=DELETE
-        )
+        self.del_head = nn.Linear(hidden_size, 2)
 
         # Head 2: Placeholder insertion predictor (per gap)
         # Input: concatenation of adjacent hidden states → 2 * hidden_size
-        self.ins_head = nn.Sequential(
-            nn.LayerNorm(hidden_size * 2),
-            nn.Dropout(config.dropout),
-            nn.Linear(hidden_size * 2, config.max_insert + 1),  # 0..max_insert
-        )
+        self.ins_head = nn.Linear(hidden_size * 2, config.max_insert + 1)
 
         # Head 3: Token predictor (per position, full vocabulary)
-        self.tok_head = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size),
-            nn.GELU(),
-            nn.LayerNorm(hidden_size),
-            nn.Linear(hidden_size, config.vocab_size),
-        )
+        self.tok_head = nn.Linear(hidden_size, config.vocab_size)
 
         self._init_head_weights()
 
@@ -98,11 +85,25 @@ class LevenshteinTransformer(nn.Module):
             attention_mask: (B, L) 1=real, 0=pad
             src_mask: unused, kept for API compatibility
         """
-        outputs = self.bert(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-        )
-        return outputs.last_hidden_state  # (B, L, H)
+        # Appendix D specifies pre-norm. Reuse the Music BERT parameter
+        # layout for initialization, but apply each block's normalization
+        # before attention / FFN rather than BERT's post-residual norm.
+        # This changes the computation: post-norm task checkpoints must be
+        # retrained, even though pretrained encoder parameter names match.
+        hidden = self.bert.embeddings(input_ids=input_ids)
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids)
+        padding_bias = (1.0 - attention_mask[:, None, None, :].to(hidden.dtype))
+        padding_bias = padding_bias * torch.finfo(hidden.dtype).min
+        for layer in self.bert.encoder.layer:
+            normalized = layer.attention.output.LayerNorm(hidden)
+            context = layer.attention.self(normalized, attention_mask=padding_bias)[0]
+            hidden = hidden + layer.attention.output.dropout(
+                layer.attention.output.dense(context))
+            normalized = layer.output.LayerNorm(hidden)
+            hidden = hidden + layer.output.dropout(
+                layer.output.dense(layer.intermediate(normalized)))
+        return hidden  # (B, L, H)
 
     def forward_del(self, input_ids, attention_mask):
         """

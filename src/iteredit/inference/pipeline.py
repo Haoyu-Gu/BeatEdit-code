@@ -70,7 +70,7 @@ class LevTInpaintingPipeline:
         self.model = LevenshteinTransformer(config)
 
         state_dict = ckpt.get('model_state_dict', ckpt)
-        self.model.load_state_dict(state_dict, strict=False)
+        self.model.load_state_dict(state_dict, strict=True)
         self.model.to(self.device)
         self.model.eval()
 

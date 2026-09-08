@@ -33,7 +33,7 @@ EPOCHS="${BEATEDIT_EPOCHS:-30}"
 BATCH="${BEATEDIT_BATCH:-64}"
 LR="${BEATEDIT_LR:-1e-4}"
 
-accelerate launch train_mlm.py \
+accelerate launch --num_processes 1 train_mlm.py \
     --data_dir "$DATA_DIR" \
     --output_dir "$OUTPUT_BASE/scheme_$SCHEME" \
     --epochs "$EPOCHS" \

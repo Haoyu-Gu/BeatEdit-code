@@ -1,49 +1,31 @@
 #!/bin/bash
-# ============================================================
-# BeatEdit Step 6: Run All Evaluations (§4)
-# ============================================================
-# Evaluation framework:
-#   3 tasks × 4 encodings × 200 samples, seed 42
-#   95% bootstrap CIs (B=10,000 resamples)
-#
-# Metrics (computed on perturbed beats only):
-#   - beat_exact_match (↑): fraction of perturbed beats matching ground truth
-#   - note_f1 (↑):          note-level F1 score
-#   - MPE (↓):              mean pitch error in semitones
-#   - FMD (↓):              Fréchet Music Distance (BERT embeddings)
-# ============================================================
-set -e
-
-echo "=== Running Evaluations ==="
-
-cd evaluation
-
-# Main evaluation
-python evaluate.py \
-    --results_dir ../results \
-    --output_dir ../results \
-    --n_samples 200 \
-    --seed 42
-
-# Statistical significance tests
-echo "--- Statistical Tests ---"
-python statistical_tests.py \
-    --results_dir ../results \
-    --output_dir ../results/significance \
-    --n_bootstrap 10000
-
-# ANOVA (Table 24: encoding × method interaction)
-echo "--- ANOVA Analysis ---"
-python anova_and_pairwise.py \
-    --results_dir ../results \
-    --output_dir ../results/significance
-
-# Generate paper-ready tables
-echo "--- Generating Summary Tables ---"
-python summarize.py \
-    --results_dir ../results \
-    --output_dir ../results
-
-echo "=== Evaluation complete ==="
-echo "Results saved to: results/"
-echo "Master statistics: results/master_statistics.json"
+# Evaluate existing predictions for all three tasks, then summarize them.
+# Predictions: PREDICTIONS_DIR/{task}/{method}/{scheme}/*.json
+# Test cases: TEST_DATA_DIR/{task}/{scheme}/*.json
+# This step computes metrics; inference and test-case construction run separately.
+# FMD uses full-sequence embeddings; other main metrics use perturbed beats.
+set -euo pipefail
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PYTHON="${PYTHON:-python3}"
+RESULTS_DIR="${RESULTS_DIR:-$REPO_DIR/results}"
+TEST_DATA_DIR="${TEST_DATA_DIR:-$REPO_DIR/evaluation/test_data}"
+PREDICTIONS_DIR="${PREDICTIONS_DIR:-$REPO_DIR/evaluation/predictions}"
+SCHEMES="${SCHEMES:-A,B,C,D}"
+DEVICE="${DEVICE:-cuda}"
+for task in correction editing inpainting; do
+    if [ "$task" = inpainting ]; then
+        methods="${INPAINTING_METHODS:-no_edit,copy_ctx,cmlm,felix,levt_inpainting}"
+    else
+        methods="${EDITING_METHODS:-no_edit,copy_ctx,cmlm,felix,gector,levt_editing}"
+    fi
+    "$PYTHON" "$REPO_DIR/evaluation/evaluate.py" \
+        --task "$task" --schemes "$SCHEMES" --methods "$methods" \
+        --test_data_dir "$TEST_DATA_DIR/$task" --predictions_dir "$PREDICTIONS_DIR" \
+        --output_dir "$RESULTS_DIR" --scope perturbed_only \
+        --per_sample --n_bootstrap 10000 --compute_fmd --device "$DEVICE" --strict
+    "$PYTHON" "$REPO_DIR/evaluation/statistical_tests.py" \
+        --task "$task" --schemes "$SCHEMES" --methods "$methods" --all_pairs \
+        --from_results --results_dir "$RESULTS_DIR" --n_bootstrap 10000 \
+        --output "$RESULTS_DIR/significance/${task}_pairwise.json"
+done
+PYTHON="$PYTHON" bash "$REPO_DIR/scripts/07_generate_tables.sh" "$RESULTS_DIR"

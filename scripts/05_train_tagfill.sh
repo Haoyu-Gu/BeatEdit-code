@@ -33,7 +33,7 @@ cd "src/tagfill/scheme_$SCHEME"
 
 # Stage 1: Train Tagger (with BERT pre-training init)
 echo "--- Stage 1: Tagger (BERT-init + Focal Loss, γ=2.0) ---"
-accelerate launch training/train_tagger.py \
+accelerate launch --num_processes 1 training/train_tagger.py \
     --data_dir "$DATA_DIR" \
     --pretrained_bert "$BERT_CKPT" \
     --output_dir "$OUTPUT_BASE/scheme_$SCHEME/tagger" \
@@ -49,7 +49,7 @@ accelerate launch training/train_tagger.py \
 
 # Stage 2: Train Inserter (initialized from BERT)
 echo "--- Stage 2: Inserter (MLM on [MASK] positions) ---"
-accelerate launch training/train_inserter.py \
+accelerate launch --num_processes 1 training/train_inserter.py \
     --data_dir "$DATA_DIR" \
     --pretrained_bert "$BERT_CKPT" \
     --output_dir "$OUTPUT_BASE/scheme_$SCHEME/inserter" \

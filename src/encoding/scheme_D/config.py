@@ -95,7 +95,8 @@ class BertPretrainConfig:
     log_every_n_steps: int = 50
     save_every_n_steps: int = 5000
     eval_every_n_steps: int = 1000
-    test_split_ratio: float = 0.05
+    validation_split_ratio: float = 0.10
+    test_split_ratio: float = 0.10
     random_seed: int = 42
 
     # DataLoader
