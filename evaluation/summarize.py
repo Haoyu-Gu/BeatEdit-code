@@ -293,11 +293,13 @@ def main():
     parser.add_argument('--scope', type=str, default='perturbed_only',
                         choices=['perturbed_only', 'full_sequence'])
     parser.add_argument('--results_dir', type=str,
-                        default=os.path.join(UNIFIED_DIR, 'results'))
+                        default=os.path.join(UNIFIED_DIR, '..', 'results'))
     parser.add_argument('--output', type=str, default=None,
                         help='Output file (default: results/SUMMARY_{task}_{scope}.md)')
     parser.add_argument('--show_ci', action='store_true',
                         help='Show 95%% bootstrap CI in main table')
+    parser.add_argument('--check_only', action='store_true',
+                        help='Validate that input results exist without writing tables')
     args = parser.parse_args()
 
     if args.output is None:
@@ -305,7 +307,8 @@ def main():
 
     results = load_results(args.results_dir, args.scope, args.task)
     if not results:
-        print(f"No results found in {args.results_dir} for task={args.task}, scope={args.scope}")
+        parser.error(f"No results found in {args.results_dir} for task={args.task}, scope={args.scope}")
+    if args.check_only:
         return
 
     lookup = build_lookup(results)
@@ -352,7 +355,7 @@ def main():
 
     # Write output
     output_text = "\n".join(output_lines)
-    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
     with open(args.output, 'w') as f:
         f.write(output_text)
 

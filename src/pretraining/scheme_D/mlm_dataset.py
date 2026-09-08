@@ -75,31 +75,39 @@ class MLMDataset(Dataset):
         elif cache_lengths:
             print(f"Warning: length cache not found ({cache_file}); length sorting disabled")
 
-        # Split into train/test
+        # Split into train/validation/test
         self._split_data()
 
         # Set of special tokens
         self._special_ids = token_config.special_token_ids
 
     def _split_data(self):
-        """Split into train/test at the song level."""
+        """Split into train/validation/test at the song level."""
+        if self.mode not in ('train', 'validation', 'test'):
+            raise ValueError(f"Unknown split: {self.mode!r}")
+        val_ratio = self.bc.validation_split_ratio
+        test_ratio = self.bc.test_split_ratio
+        if not (0 < val_ratio < 1 and 0 < test_ratio < 1
+                and val_ratio + test_ratio < 1):
+            raise ValueError("Validation/test ratios must be positive and sum to < 1")
+        # One complete song per NPZ. Canonical ordering also handles length caches.
         total = len(self.data_files)
+        indices = np.array(sorted(range(total), key=lambda i: self.data_files[i]),
+                           dtype=int)
         rng = np.random.RandomState(self.bc.random_seed)
-        indices = np.arange(total)
         rng.shuffle(indices)
-
-        test_size = int(total * self.bc.test_split_ratio)
-        train_size = total - test_size
-
-        if self.mode == 'train':
-            selected = indices[:train_size]
-            print(f"Training set: {len(selected)} files")
-        elif self.mode == 'test':
-            selected = indices[train_size:]
-            print(f"Test set: {len(selected)} files")
-        else:
-            selected = indices
-            print(f"All data: {len(selected)} files")
+        val_size = int(total * val_ratio)
+        test_size = int(total * test_ratio)
+        train_size = total - val_size - test_size
+        if min(train_size, val_size, test_size) == 0:
+            raise ValueError("Dataset too small for nonempty train/validation/test splits")
+        splits = {
+            'train': indices[:train_size],
+            'validation': indices[train_size:train_size + val_size],
+            'test': indices[train_size + val_size:],
+        }
+        selected = splits[self.mode]
+        print(f"{self.mode} set: {len(selected)} songs")
 
         self.data_files = [self.data_files[i] for i in selected]
         if self.file_lengths is not None:
@@ -136,7 +144,7 @@ class MLMDataset(Dataset):
 
         # Random pitch shift
         pitch_shift = 0
-        if np.random.random() < 0.7:
+        if self.mode == 'train' and np.random.random() < 0.7:
             pitch_shift = np.random.randint(-5, 6)
 
         # Process each bar

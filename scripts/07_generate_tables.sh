@@ -1,33 +1,20 @@
 #!/bin/bash
-# ============================================================
-# BeatEdit Step 7: Generate Paper Tables from Results
-# ============================================================
-# Uses master_statistics.json to regenerate all paper tables.
-# Can be run without GPU — only needs pre-computed result JSONs.
-# ============================================================
-set -e
+# Generate per-task Markdown summaries from evaluation outputs.
+# Usage: bash scripts/07_generate_tables.sh [results_dir] [output_dir]
+set -euo pipefail
 
-echo "=== Generating Paper Tables ==="
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+RESULTS_DIR="${1:-$REPO_DIR/results}"
+OUTPUT_DIR="${2:-$RESULTS_DIR/tables}"
+PYTHON="${PYTHON:-python3}"
 
-cd evaluation
-
-python summarize.py \
-    --results_dir ../results \
-    --master_stats ../results/master_statistics.json \
-    --output_dir ../results/tables
-
-echo ""
-echo "Generated tables correspond to:"
-echo "  Table 3:  Cross-encoding comparison"
-echo "  Table 4:  Main results (best scheme per method)"
-echo "  Table 5a: Encoding × Method (beat exact match)"
-echo "  Table 5b: Difficulty level breakdown"
-echo "  Table 8:  Inference latency"
-echo "  Table 16: LLaMA baseline results"
-echo "  Table 17: Diffusion baseline results"
-echo "  Table 19: Full per-scheme results"
-echo "  Table 20: FMD full results"
-echo "  Table 23: Pairwise bootstrap comparisons"
-echo "  Table 24: Two-way ANOVA"
-echo ""
-echo "=== Done ==="
+# Validate every input before writing any summaries.
+for task in correction editing inpainting; do
+    "$PYTHON" "$REPO_DIR/evaluation/summarize.py" \
+        --task "$task" --results_dir "$RESULTS_DIR" --check_only
+done
+for task in correction editing inpainting; do
+    "$PYTHON" "$REPO_DIR/evaluation/summarize.py" \
+        --task "$task" --results_dir "$RESULTS_DIR" \
+        --output "$OUTPUT_DIR/SUMMARY_${task}_perturbed_only.md" --show_ci
+done

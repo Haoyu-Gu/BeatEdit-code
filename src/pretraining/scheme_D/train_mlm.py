@@ -120,7 +120,7 @@ def train():
         data_dir=bert_config.data_dir,
         token_config=token_config,
         bert_config=bert_config,
-        mode='test',
+        mode='validation',
     )
 
     collator = MLMCollator(

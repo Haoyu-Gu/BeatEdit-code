@@ -115,6 +115,12 @@ export BEATEDIT_DATA_DIR=/path/to/data/npz
 that emits 6-channel arrays (velocity is off by default, as in the paper).
 See [data_prep/README.md](data_prep/README.md) for the format and its caveats.
 
+MLM pretraining uses an 80/10/10 train/validation/test split (seed 42).
+Use one complete, deduplicated song per NPZ and the same file inventory
+across schemes. Split before cropping or augmentation; multiple excerpts
+of one song must not be treated as independent files. Validation loss
+selects `best_model`; reserve the test partition for final evaluation.
+
 ### 3. Training Pipeline
 
 Training follows a strict dependency order:
@@ -164,7 +170,7 @@ automatically when CUDA is unavailable (`BEATEDIT_PRECISION` overrides).
 ### 4. Evaluation
 ```bash
 bash scripts/06_evaluate_all.sh     # Run metrics + significance tests
-bash scripts/07_generate_tables.sh  # Generate paper tables
+bash scripts/07_generate_tables.sh  # Generate per-task Markdown summaries
 ```
 
 ### 5. Encoding validity check (no training required)
