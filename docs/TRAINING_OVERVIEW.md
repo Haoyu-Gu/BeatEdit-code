@@ -306,7 +306,7 @@ Scheme B leads by a wide margin and has generally higher accuracy on the APPEND 
 
 ### 7.6 Preliminary Findings
 
-1. **Scheme B is the strongest on the component-level metrics of both Tagger and Inserter** (yet the worst end-to-end; the paradox is caused by cascaded errors — see RESULTS_SUMMARY.md).
+1. **Scheme B is the strongest on the component-level metrics of both Tagger and Inserter** (yet the worst end-to-end; the paradox is caused by cascaded errors — see the paper).
 2. **Scheme D converges slowest** (Inserter reached only top-1 = 0.08 at epoch 7), consistent with D being the weakest in BERT MLM pre-training.
 3. The advantage of relative position encoding is even more pronounced on the editing task (Tagger F1: B = 0.6050 vs. A = 0.4778).
 
@@ -361,4 +361,4 @@ Scheme B leads by a wide margin and has generally higher accuracy on the APPEND 
 4. TagFill inference pipeline evaluation (Tagger -> Inserter, end-to-end) — done
 5. Full comparison across all four schemes — done
 6. End-to-end evaluation against the LLaMA generation baseline — done
-7. IterEdit (Levenshtein Transformer) inpainting and editing — done; results are in `results/completion/` and `results/editing/`
+7. IterEdit (Levenshtein Transformer) inpainting and editing — done; experimental outputs are not distributed with this repository.

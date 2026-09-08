@@ -3,6 +3,11 @@ __pycache__/
 .DS_Store
 
 # Run outputs
+results/
+*.json
+*.JSON
+*.jsonl
+*.json5
 checkpoints/**/*.pt
 checkpoints/**/*.safetensors
 checkpoints/**/*.bin

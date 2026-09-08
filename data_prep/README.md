@@ -72,4 +72,5 @@ orientation) and end-to-end through the encoder and decoder. They are not the
 byte-for-byte original scripts, so edge cases (unusual tuplets, mid-piece time
 signature changes) may quantize slightly differently; re-preprocessing the
 corpus from scratch can therefore shift the last digits of the reported numbers.
-Pre-computed results in `results/` come from the original preprocessing run.
+The paper reports results from the original preprocessing run; experimental
+outputs are not bundled with this repository.

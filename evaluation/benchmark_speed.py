@@ -259,9 +259,9 @@ def benchmark_levt():
     """Benchmark LevT (Scheme A, editing_v2) inference."""
     # NOTE (release): this benchmark depends on components that are not part of
     # this code release (the standalone LevT runner (run_levt.py) and its checkpoints). Pre-computed timings for every method are in
-    # results/benchmark_results.json (paper Table on efficiency).
+    # the paper's efficiency table (not bundled with this code release).
     print("  SKIPPED: requires the standalone LevT runner (run_levt.py) and its checkpoints (not included in this release); "
-          "see results/benchmark_results.json for the paper timings.")
+          "see the paper's efficiency table for the reported timings.")
     return None
 
     print("\n" + "="*60)
@@ -328,9 +328,9 @@ def benchmark_levt():
 def benchmark_llama():
     # NOTE (release): this benchmark depends on components that are not part of
     # this code release (the PianoLLaMA baseline generator (model.py/config.py, external to this repo)). Pre-computed timings for every method are in
-    # results/benchmark_results.json (paper Table on efficiency).
+    # the paper's efficiency table (not bundled with this code release).
     print("  SKIPPED: requires the PianoLLaMA baseline generator (model.py/config.py, external to this repo) (not included in this release); "
-          "see results/benchmark_results.json for the paper timings.")
+          "see the paper's efficiency table for the reported timings.")
     return None
 
     """Benchmark LLaMA AR (Scheme C) inference."""
@@ -519,9 +519,9 @@ def benchmark_llama():
 def benchmark_cmlm():
     # NOTE (release): this benchmark depends on components that are not part of
     # this code release (run_baselines.py helpers (external to this repo)). Pre-computed timings for every method are in
-    # results/benchmark_results.json (paper Table on efficiency).
+    # the paper's efficiency table (not bundled with this code release).
     print("  SKIPPED: requires run_baselines.py helpers (external to this repo) (not included in this release); "
-          "see results/benchmark_results.json for the paper timings.")
+          "see the paper's efficiency table for the reported timings.")
     return None
 
     """Benchmark BERT-CMLM (Scheme C) inference."""
@@ -620,9 +620,9 @@ def benchmark_cmlm():
 def benchmark_diffusion(start_ratio=0.3):
     # NOTE (release): this benchmark depends on components that are not part of
     # this code release (the discrete-diffusion baseline package (external to this repo)). Pre-computed timings for every method are in
-    # results/benchmark_results.json (paper Table on efficiency).
+    # the paper's efficiency table (not bundled with this code release).
     print("  SKIPPED: requires the discrete-diffusion baseline package (external to this repo) (not included in this release); "
-          "see results/benchmark_results.json for the paper timings.")
+          "see the paper's efficiency table for the reported timings.")
     return None
 
     """Benchmark Discrete Diffusion SDEdit (Scheme D) inference."""
