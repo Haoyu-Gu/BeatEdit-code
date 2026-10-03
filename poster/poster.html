@@ -1,0 +1,206 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only
+BeatEdit poster: A0 portrait (841 x 1189 mm).
+Layout adapted from Posterly; see LICENSES/NOTICE.md.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="posterly">
+<title>BeatEdit — ACM Multimedia 2026</title>
+<style>
+@page { size: 841mm 1189mm; margin: 0; }
+:root {
+  /* ===== DESIGN TOKENS ===== */
+  --u: 1px;
+  --accent: #633A91; --accent-deep: #422660;
+  --accent-light: #F0EAF6; --accent-soft: #D9CCE8; --accent-ink: #FFFFFF;
+  --emph: #633A91; --emph-soft: #F0EAF6; --emph-ink: #FFFFFF;
+  --text-primary: #23202A; --text-secondary: #575160; --text-muted: #71677B;
+  --bg-page: #FAF8FC; --bg-card: #FFFFFF; --bg-card-tint: #F6F6F7;
+  --border-soft: #D9CCE8; --border-strong: #633A91;
+  --bg-screen: #DED9E4; --fig-bg: #FFFFFF; --fig-frame: #FFFFFF;
+  --ps-mark-ink: #633A91;
+  --fs-1: calc(7 * var(--u)); --fs-2: calc(8 * var(--u));
+  --fs-3: calc(9 * var(--u)); --fs-4: calc(10 * var(--u));
+  --fs-5: calc(12 * var(--u)); --fs-6: calc(14 * var(--u));
+  --fs-7: calc(17 * var(--u)); --fs-8: calc(24 * var(--u));
+  --fs-9: calc(43 * var(--u));
+  --font-sans: "Helvetica Neue", Arial, sans-serif;
+  --font-serif: Georgia, "Times New Roman", serif;
+  /* ===== END DESIGN TOKENS ===== */
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg-screen); color: var(--text-primary); }
+body { font-family: var(--font-serif); }
+p, li, dd, figcaption, .body-text, .caption, .section-title { text-wrap: pretty; }
+.title { text-wrap: pretty; }
+.poster { position: relative; width: calc(841 * var(--u)); height: calc(1189 * var(--u)); padding: calc(28 * var(--u)); background: var(--bg-page); display: grid; grid-template-columns: minmax(0,1fr); grid-template-rows: calc(136 * var(--u)) minmax(0,1fr) calc(103 * var(--u)); gap: calc(12 * var(--u)); }
+.body-stack { display: grid; grid-template-columns: minmax(0,1fr); grid-template-rows: calc(108 * var(--u)) calc(216 * var(--u)) calc(238 * var(--u)) calc(106 * var(--u)) minmax(0,1fr); gap: calc(13 * var(--u)); min-height: 0; }
+.masthead { position: relative; border-top: calc(5 * var(--u)) solid var(--accent); padding-top: calc(10 * var(--u)); }
+.title-row { display: flex; align-items: baseline; gap: calc(16 * var(--u)); }
+.brand { flex: 0 0 auto; margin: 0; font: 800 var(--fs-9)/1 var(--font-sans); color: var(--accent); letter-spacing: calc(-1.5 * var(--u)); }
+.title { font: 750 var(--fs-8)/1.15 var(--font-sans); margin: 0; letter-spacing: calc(-.3 * var(--u)); }
+.author-logo-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: calc(16 * var(--u)); margin-top: calc(8 * var(--u)); }
+.logo-row { display: flex; gap: calc(14 * var(--u)); align-items: center; margin-right: calc(8 * var(--u)); }
+.logo-slot img { display: block; height: calc(49 * var(--u)); width: auto; object-fit: contain; }
+.logo-slot.scut-seal img { clip-path: circle(50%); }
+.logo-slot.nju-seal img { mix-blend-mode: multiply; }
+.venue-badge { position: relative; width: calc(237.15 * var(--u)); height: calc(42.5 * var(--u)); overflow: hidden; }
+.venue-badge img { position: absolute; top: calc(-7.99 * var(--u)); left: calc(-4.08 * var(--u)); display: block; height: calc(53.55 * var(--u)); width: auto; mix-blend-mode: multiply; }
+.byline { font: 500 var(--fs-6)/1.35 var(--font-sans); margin: 0 0 calc(4 * var(--u)); }
+sup { font-size: .65em; vertical-align: super; }
+.affiliations { font: 400 var(--fs-4)/1.5 var(--font-sans); color: var(--text-secondary); }
+.claim { margin-top: calc(8 * var(--u)); font: 700 var(--fs-5)/1.2 var(--font-sans); color: var(--accent-deep); }
+.card { position: relative; background: var(--bg-card); border: calc(1.1 * var(--u)) solid var(--border-strong); border-radius: calc(3 * var(--u)); padding: calc(19 * var(--u)) calc(17 * var(--u)) calc(13 * var(--u)); min-width: 0; }
+.section-title { position: absolute; top: calc(-10 * var(--u)); left: calc(12 * var(--u)); margin: 0; padding: calc(3 * var(--u)) calc(8 * var(--u)); background: var(--accent); color: var(--accent-ink); font: 700 var(--fs-5)/1.15 var(--font-sans); border-radius: calc(2 * var(--u)); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.num { margin-right: calc(6 * var(--u)); font-size: var(--fs-5); font-weight: 800; }
+p { margin: 0; font-size: var(--fs-4); line-height: 1.4; }
+.intro { font-size: var(--fs-3); }
+.figure { margin: calc(6 * var(--u)) 0 0; }
+.figure img { display: block; width: 100%; height: auto; background: var(--fig-bg); }
+.encoding-figure img { width: 100%; margin: 0 auto; }
+.encoding-figure > .caption { margin: 0 0 calc(6 * var(--u)); font-family: var(--font-serif); font-size: var(--fs-3); color: var(--text-primary); }
+.caption { font: 400 var(--fs-2)/1.4 var(--font-sans); color: var(--text-secondary); margin-top: calc(5 * var(--u)); }
+.properties { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: calc(12 * var(--u)); margin-top: calc(7 * var(--u)); }
+.properties strong { display: block; font: 700 var(--fs-3)/1.3 var(--font-sans); color: var(--accent); }
+.properties p { font-size: var(--fs-2); line-height: 1.3; }
+.mechanisms { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: calc(12 * var(--u)); margin: calc(3 * var(--u)) 0 0; }
+.mechanism { border-left: calc(2 * var(--u)) solid var(--accent-soft); padding-left: calc(8 * var(--u)); }
+.mechanism h3 { margin: 0 0 calc(2 * var(--u)); font: 750 var(--fs-6)/1.2 var(--font-sans); color: var(--accent); }
+.mechanism .task { font: 700 var(--fs-1)/1.3 var(--font-sans); color: var(--text-secondary); text-transform: uppercase; letter-spacing: calc(.3 * var(--u)); margin-bottom: calc(3 * var(--u)); }
+.mechanism p { font-size: var(--fs-4); line-height: 1.35; }
+.keybox { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: calc(12 * var(--u)); }
+.keybox.keybox--4 { grid-template-columns: repeat(4,minmax(0,1fr)); }
+.results-intro { margin: 0 0 calc(8 * var(--u)); font: 400 var(--fs-5)/1.35 var(--font-serif); }
+.kb-item { display: flex; flex-direction: column; justify-content: center; min-height: calc(87 * var(--u)); padding: calc(7 * var(--u)) calc(9 * var(--u)); background: var(--bg-card-tint); color: var(--text-primary); border-top: calc(2 * var(--u)) solid var(--accent); }
+.kb-num { font: 750 var(--fs-5)/1.2 var(--font-sans); color: var(--accent); white-space: nowrap; margin-bottom: calc(4 * var(--u)); }
+.kb-num span { display: block; font: 700 var(--fs-6)/1.3 var(--font-sans); margin-bottom: calc(3 * var(--u)); }
+.kb-label { font: 600 var(--fs-3)/1.35 var(--font-sans); color: var(--accent-deep); min-height: 2lh; }
+.motivation-title { margin: 0 0 calc(8 * var(--u)); font: 750 var(--fs-7)/1.15 var(--font-sans); color: var(--accent-deep); }
+.creation-tasks { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: calc(16 * var(--u)); }
+.creation-tasks h3 { margin: 0 0 calc(3 * var(--u)); font: 700 var(--fs-5)/1.2 var(--font-sans); color: var(--accent); }
+.creation-tasks p { font-size: var(--fs-3); }
+.shared-problem { margin-top: calc(8 * var(--u)); font: 600 var(--fs-3)/1.4 var(--font-sans); color: var(--accent-deep); }
+.requirements-grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.1fr); gap: calc(20 * var(--u)); }
+.requirement { margin-bottom: calc(12.7 * var(--u)); }
+.requirement:last-child { margin-bottom: 0; }
+.requirement h3 { margin: 0 0 calc(3 * var(--u)); font: 750 var(--fs-5)/1.2 var(--font-sans); color: var(--accent); }
+.requirement p { font-size: var(--fs-5); line-height: 1.35; }
+.requirements-grid .result-table { margin-top: 0; }
+.requirements-grid .result-table { font-size: var(--fs-4); }
+.requirements-grid .result-table th, .requirements-grid .result-table td { padding: calc(4.9 * var(--u)) calc(5 * var(--u)); }
+.matrix-note { font: 400 var(--fs-2)/1.4 var(--font-sans); color: var(--text-secondary); }
+.evidence-line { border-top: calc(.7 * var(--u)) solid var(--border-soft); margin-top: calc(7 * var(--u)); padding-top: calc(6 * var(--u)); font: 500 var(--fs-2)/1.3 var(--font-sans); color: var(--text-secondary); }
+.results-grid { display: grid; grid-template-columns: minmax(0,1.08fr) minmax(0,1fr); gap: calc(14 * var(--u)); min-height: 0; }
+.column { display: flex; flex-direction: column; min-width: 0; }
+.column > .card { flex: 1; }
+.result-table { width: 100%; border-collapse: collapse; font: 500 var(--fs-3)/1.2 var(--font-sans); margin: calc(9 * var(--u)) 0 calc(7 * var(--u)); font-variant-numeric: tabular-nums; }
+.result-table th { color: var(--accent-ink); background: var(--accent); font-weight: 600; }
+.result-table th, .result-table td { padding: calc(4 * var(--u)) calc(5 * var(--u)); text-align: center; border-bottom: calc(.6 * var(--u)) solid var(--border-soft); }
+.result-table .method { text-align: left; }
+.result-table tr.ours td { background: var(--emph-soft); color: var(--accent-deep); }
+.result-table tr.ours:nth-last-child(2) td { background: color-mix(in srgb, var(--emph-soft) 70%, var(--bg-card)); color: var(--accent-deep); }
+.result-table .best { font-weight: 850; }
+.table-note { font: 400 var(--fs-2)/1.4 var(--font-sans); color: var(--text-secondary); }
+.metric { display: flex; align-items: baseline; gap: calc(9 * var(--u)); margin-top: calc(12 * var(--u)); }
+.stat-num { font: 800 var(--fs-8)/1 var(--font-sans); color: var(--accent); white-space: nowrap; }
+.metric p { font: 500 var(--fs-3)/1.3 var(--font-sans); }
+.scheme-grid { margin: calc(9 * var(--u)) 0; }
+.scheme-grid td, .scheme-grid th { padding: calc(4 * var(--u)); }
+.callout { margin-top: calc(10 * var(--u)); padding: calc(9 * var(--u)); background: var(--accent-light); color: var(--accent-deep); font: 600 var(--fs-3)/1.4 var(--font-sans); border-left: calc(3 * var(--u)) solid var(--accent); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.study { margin-top: calc(9 * var(--u)); font-size: var(--fs-3); }
+.footer { border-top: calc(2 * var(--u)) solid var(--accent); padding-top: calc(9 * var(--u)); display: grid; grid-template-columns: minmax(0,1fr) repeat(4,calc(80 * var(--u))); gap: calc(4 * var(--u)); font-family: var(--font-sans); }
+.footer h3 { font: 750 var(--fs-7)/1.2 var(--font-sans); margin: 0 0 calc(5 * var(--u)); color: var(--accent); }
+.presenter-tag { margin-left: calc(8 * var(--u)); font: 500 var(--fs-4)/1.2 var(--font-sans); color: var(--text-secondary); }
+.presenter-bio { font: 500 var(--fs-4)/1.4 var(--font-sans); }
+.presenter-bio + .presenter-bio { margin-top: calc(2 * var(--u)); }
+.presenter-contact { margin-top: calc(4 * var(--u)); font: 500 var(--fs-3)/1.4 var(--font-sans); }
+.previous-work { margin-top: calc(4 * var(--u)); font: 400 var(--fs-3)/1.3 var(--font-sans); color: var(--text-secondary); }
+.previous-work strong { color: var(--accent); font-weight: 700; }
+.qr-block { text-align: center; align-self: center; }
+.qr-block img { display: block; width: calc(72 * var(--u)); height: calc(72 * var(--u)); margin-inline: auto; background: var(--bg-card); mix-blend-mode: multiply; }
+.qr-block.wechat { padding-top: calc(1.5 * var(--u)); }
+.qr-block.wechat img { width: calc(69 * var(--u)); height: calc(69 * var(--u)); padding: calc(4 * var(--u)); object-fit: contain; }
+.qr-label { display: block; margin-top: calc(3 * var(--u)); font: 700 var(--fs-5)/1.2 var(--font-sans); white-space: nowrap; color: var(--accent); }
+.qr-block.wechat .qr-label { margin-top: calc(4.5 * var(--u)); }
+.links { font: 500 var(--fs-3)/1.6 var(--font-sans); }
+a { color: var(--accent-deep); text-decoration: none; }
+.scope { margin-top: calc(6 * var(--u)); font: 400 var(--fs-1)/1.4 var(--font-sans); color: var(--text-secondary); }
+.qr-slot { border: calc(1 * var(--u)) dashed var(--accent); border-radius: calc(3 * var(--u)); width: calc(70 * var(--u)); height: calc(70 * var(--u)); text-align: center; display: grid; place-content: center; font: 500 var(--fs-2)/1.4 var(--font-sans); background: var(--bg-card); color: var(--accent); }
+.ps-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.corner-sig { position: absolute; bottom: calc(8 * var(--u)); right: calc(8 * var(--u)); width: calc(5 * var(--u)); height: calc(5 * var(--u)); color: var(--ps-mark-ink); opacity: .5; }
+.corner-sig svg { width: 100%; height: 100%; display: block; }
+.woven-sig { display: inline-block; width: calc(4 * var(--u)); height: calc(4 * var(--u)); margin-left: calc(3 * var(--u)); color: var(--accent); }
+@media print { :root { --u: 1mm; } html,body { background: var(--bg-page); } .poster { margin: 0; } }
+</style>
+</head>
+<body>
+<main class="poster" data-measure-role="poster" data-posterly-contract="identity-v1" data-ps-identity="on">
+  <svg class="ps-sprite" data-color-exempt="logo" aria-hidden="true"><defs><symbol id="psReg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="25" fill="none" stroke="currentColor" stroke-width="8"/><line x1="50" y1="7" x2="50" y2="93" stroke="currentColor" stroke-width="8"/><line x1="7" y1="50" x2="93" y2="50" stroke="currentColor" stroke-width="8"/></symbol></defs></svg>
+  <header class="masthead" data-measure-role="header">
+    <div class="title-row"><h1 class="brand">BeatEdit</h1><h2 class="title">Symbolic Music Generation as Explicit Editing</h2></div>
+    <div class="author-logo-row"><div class="author-info">
+    <p class="byline">Haoyu Gu<sup>1</sup>, Lekai Qian<sup>1</sup>, Haowu Zhou<sup>1</sup>, Qi Liu<sup>1,*</sup>, Shuai Wang<sup>2,*</sup></p>
+    <div class="affiliations"><div><sup>1</sup> School of Future Technology, South China University of Technology</div><div><sup>2</sup> School of Intelligence Science and Technology, Nanjing University</div><div>* Corresponding authors</div></div>
+    </div><div class="logo-row" data-logo-zone><div class="venue-badge"><img src="assets/acmmm2026_official.png" alt="Official ACM Multimedia 2026 conference logo" data-color-exempt="logo"></div><div class="logo-slot logo-square scut-seal"><img src="assets/scut_official.jpg" alt="South China University of Technology" data-color-exempt="logo"></div><div class="logo-slot logo-square nju-seal"><img src="assets/nju_emblem_official.jpg" alt="Nanjing University" data-color-exempt="logo"></div></div></div>
+  </header>
+  <div class="body-stack" data-measure-role="column">
+  <section class="card" data-measure-role="card">
+    <h2 class="section-title"><span class="num">01</span><span class="st-text">Why explicit editing?</span></h2>
+    <h3 class="motivation-title">Music creation is a process of revision.</h3>
+    <div class="creation-tasks"><div><h3>Correct a wrong note</h3><p>Change the error; retain the phrase.</p></div><div><h3>Reshape accompaniment</h3><p>Revise the left hand; preserve the melody.</p></div><div><h3>Complete missing bars</h3><p>Write new content into existing context.</p></div></div>
+    <p class="shared-problem">Source and target overlap. The editor must locate what needs to change and preserve the rest.</p>
+  </section>
+  <section class="card" data-measure-role="card">
+    <h2 class="section-title"><span class="num">02</span><span class="st-text">The bottleneck is the representation: R1–R3</span></h2>
+    <div class="requirements-grid">
+      <div class="track">
+        <div class="requirement"><h3>R1 · Atomic edit units</h3><p>Each note should map to a compact, self-contained token group, allowing one edit label to address a complete musical target.</p></div>
+        <div class="requirement"><h3>R2 · Source–target alignment</h3><p>Source and target need stable positional correspondence, so edit labels can be extracted by directly comparing aligned units.</p></div>
+        <div class="requirement"><h3>R3 · Edit locality</h3><p>An edit should affect a bounded token span and preserve a valid encoding, without updating the rest of the sequence.</p></div>
+      </div>
+      <div class="track">
+        <table class="result-table"><thead><tr><th class="method">Encoding</th><th>R1</th><th>R2</th><th>R3</th><th class="method">Bottleneck</th></tr></thead><tbody>
+          <tr><td class="method">MIDI-Like</td><td>×</td><td>×</td><td>×</td><td class="method">Onset/offset decoupled</td></tr>
+          <tr><td class="method">REMI</td><td>×</td><td>×</td><td>×</td><td class="method">Insert/delete shifts positions</td></tr>
+          <tr><td class="method">Structured</td><td>∼</td><td>×</td><td>∼</td><td class="method">Relative time propagates</td></tr>
+          <tr><td class="method">CPWord</td><td>∼</td><td>×</td><td>∼</td><td class="method">No structural grid</td></tr>
+          <tr class="ours"><td class="method">BEAT (Rel.)</td><td>✓</td><td>✓</td><td>∼</td><td class="method">Within-beat pitch cascade</td></tr>
+          <tr class="ours"><td class="method">BEAT (Abs.)</td><td>✓</td><td>✓</td><td>✓</td><td class="method">Meets all three requirements</td></tr>
+        </tbody></table>
+        <p class="matrix-note">✓ satisfied · × violated · ∼ partial.</p>
+      </div>
+    </div>
+  </section>
+  <section class="card" data-measure-role="card">
+    <h2 class="section-title"><span class="num">03</span><span class="st-text">BEAT supplies a beat-aligned editing space</span></h2>
+    <figure class="figure encoding-figure"><figcaption class="caption">BEAT compresses within-beat rhythm into ternary patterns and aligns source and target on a fixed beat grid.</figcaption><img src="assets/encoding.svg" alt="Paper figure: piano roll, ternary patterns, beat-level assembly and voice interleaving"></figure>
+  </section>
+  <section class="card" data-measure-role="card">
+    <h2 class="section-title"><span class="num">04</span><span class="st-text">Choose the mechanism by edit density</span></h2>
+    <div class="mechanisms"><div class="mechanism"><h3>SeqTag</h3><div class="task">Sparse · Error correction</div><p>Detect erroneous tokens and assign edit tags, keeping low-confidence positions unchanged.</p></div><div class="mechanism"><h3>IterEdit</h3><div class="task">Dense · Accompaniment editing</div><p>Delete–insert–predict cycles revise accompaniment while preserving melody and structure.</p></div><div class="mechanism"><h3>TagFill</h3><div class="task">Missing spans · Segment completion</div><p>Allocate mask positions, then fill them in two confidence-ranked passes while preserving surrounding musical context.</p></div></div>
+  </section>
+  <section class="card" data-measure-role="card">
+    <h2 class="section-title"><span class="num">05</span><span class="st-text">Results: accuracy, latency, and encoding</span></h2>
+    <p class="results-intro"><strong>Mechanism and encoding both matter:</strong> explicit editing improves accuracy and speed; edit-compatible encoding improves recovery. Correction/editing: beat exact match; completion: POP909 Note F1; encoding: recovery.</p>
+      <div class="keybox keybox--4">
+        <div class="kb-item"><div class="kb-num"><span>Correction</span>1.84×</div><div class="kb-label">SeqTag .726 vs AR-Detect .394<br>65 vs 9,677 ms</div></div>
+        <div class="kb-item"><div class="kb-num"><span>Editing</span>1.73×</div><div class="kb-label">IterEdit .480 vs AR-Detect .278<br>655 vs 9,458 ms</div></div>
+        <div class="kb-item"><div class="kb-num"><span>Completion</span>4.65×</div><div class="kb-label">TagFill-D .279 · Polyffusion .060<br>Note F1 · POP909 · 35 vs 1,747 ms</div></div>
+        <div class="kb-item"><div class="kb-num"><span>Encoding</span>4.81×</div><div class="kb-label">BEAT 48.1% vs REMI 10.0%<br>Recovery · Same SeqTag</div></div>
+      </div>
+  </section>
+  </div>
+  <footer class="footer" data-measure-role="footer">
+    <div class="presenter"><h3>Haoyu Gu<svg class="woven-sig" data-ps-mark="woven" data-color-exempt="logo" aria-hidden="true" viewBox="0 0 100 100"><use href="#psReg"/></svg><span class="presenter-tag">First author &amp; presenter</span></h3><p class="presenter-bio">Incoming Master’s Student at SIGS, Tsinghua University · Fall 2027</p><p class="presenter-bio">Research Interests: Symbolic Music Representation and Generation</p><div class="presenter-contact"><a href="mailto:haoyu-gu@outlook.com">haoyu-gu@outlook.com</a> · <a href="https://arxiv.org/abs/2607.11124">Paper: arXiv:2607.11124</a> · Paper ID: 3781</div><div class="previous-work"><strong>Previous Work:</strong> <a href="https://arxiv.org/abs/2604.19532">BEAT: Tokenizing and Generating Symbolic Music by Uniform Temporal Steps</a> · ICML 2026</div></div>
+    <a class="qr-block" href="https://haoyu-gu.github.io/"><img src="assets/qr/haoyu_homepage_qr.svg" alt="QR code for Haoyu Gu's personal homepage"><span class="qr-label">About Me</span></a>
+    <a class="qr-block" href="https://arxiv.org/abs/2604.19532"><img src="assets/qr/beat_prior_work_qr.svg" alt="QR code for the BEAT previous-work paper"><span class="qr-label">BEAT</span></a>
+    <a class="qr-block" href="https://haoyu-gu.github.io/BeatEdit/"><img src="assets/qr/beatedit_demo_qr.svg" alt="QR code for BeatEdit demo and code"><span class="qr-label">Demo &amp; Code</span></a>
+    <div class="qr-block wechat"><img src="assets/qr/wechat_qr.jpg" alt="Haoyu Gu's WeChat QR code"><span class="qr-label">WeChat</span></div>
+  </footer>
+  <span class="corner-sig" data-ps-mark="corner" data-color-exempt="logo" aria-hidden="true"><svg viewBox="0 0 100 100"><use href="#psReg"/></svg></span>
+</main>
+</body>
+</html>

@@ -4,6 +4,7 @@ Official implementation for the ACM Multimedia 2026 paper.
 
 - **Paper** (arXiv, extended version with Appendices A–P): https://arxiv.org/abs/2607.11124
 - **Supplementary material** (Appendices A–P as a standalone PDF): [supplementary.pdf](supplementary.pdf)
+- **Poster** (A0 PDF, 300-DPI PNG and editable HTML/CSS): [poster/](poster/)
 
 ## Paper-to-Code Mapping
 

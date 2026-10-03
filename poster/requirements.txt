@@ -1,0 +1,5 @@
+playwright==1.63.0
+PyMuPDF==1.28.2
+Pillow==12.3.0
+qrcode[pil]==8.2
+zxing-cpp==3.1.1
