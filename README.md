@@ -1,10 +1,55 @@
-# BeatEdit: Symbolic Music Generation as Explicit Editing
+<div align="center">
 
-Official implementation for the ACM Multimedia 2026 paper. 
+<h1>BeatEdit</h1>
+<h3>Symbolic Music Generation as Explicit Editing</h3>
+<p><strong>ACM Multimedia 2026</strong></p>
 
-- **Paper** (arXiv, extended version with Appendices A–P): https://arxiv.org/abs/2607.11124
-- **Supplementary material** (Appendices A–P as a standalone PDF): [supplementary.pdf](supplementary.pdf)
-- **Poster** (A0 PDF, 300-DPI PNG and editable HTML/CSS): [poster/](poster/)
+<p>
+<a href="https://arxiv.org/abs/2607.11124"><img src="https://img.shields.io/badge/arXiv-2607.11124-B31B1B?style=for-the-badge" alt="Paper on arXiv"></a>
+<a href="https://haoyu-gu.github.io/BeatEdit/"><img src="https://img.shields.io/badge/Demo-Listen_%26_Explore-633A91?style=for-the-badge" alt="Interactive music demos"></a>
+<a href="https://haoyu-gu.github.io/posters/beatedit/"><img src="https://img.shields.io/badge/Poster-View_Online-422660?style=for-the-badge" alt="View the conference poster"></a>
+<a href="https://github.com/Haoyu-Gu/BeatEdit-code/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Haoyu-Gu/BeatEdit-code/ci.yml?branch=main&style=for-the-badge&label=Tests" alt="CI status"></a>
+</p>
+
+<p>
+<a href="#quick-start">Quick Start</a> ·
+<a href="#how-it-works">How It Works</a> ·
+<a href="supplementary.pdf">Supplementary</a> ·
+<a href="poster/">Poster Files</a> ·
+<a href="#citation">Citation</a>
+</p>
+
+</div>
+
+## Music creation is a process of revision
+
+Correct a wrong note. Reshape the accompaniment. Complete missing bars.
+
+**BeatEdit generates symbolic music by explicitly editing an existing draft.**
+Three editing mechanisms share a beat-aligned representation and a pre-trained
+Music BERT backbone, spanning point corrections, accompaniment editing, and
+segment completion.
+
+**[Listen to the input and edited music →](https://haoyu-gu.github.io/BeatEdit/)**
+
+## How it works
+
+| Correction · **SeqTag** | Editing · **IterEdit** | Completion · **TagFill** |
+|:---|:---|:---|
+| Detect errors and assign per-token edit labels. | Refine accompaniment through delete–insert–predict iterations. | Predict the edit structure, then fill missing content in confidence-ranked passes. |
+
+### A beat-aligned editing space
+
+BEAT supplies **atomic edit units**, **source–target alignment**, and **edit locality**.
+The four encoding schemes compare absolute versus relative positions and
+separated versus bundled tokens.
+
+<p align="center">
+  <img src="poster/assets/encoding.svg" width="960" alt="BEAT encoding: piano roll to ternary patterns, beat assembly, and token sequence">
+</p>
+
+<details>
+<summary><strong>Implementation map and encoding schemes</strong></summary>
 
 ## Paper-to-Code Mapping
 
@@ -42,6 +87,11 @@ model vocabulary in `src/pretraining/scheme_*/config.py` (base vocabulary +
 are legacy values of the encoding module (e.g. Scheme A lists 268 because of
 reserved slots for an old autoregressive generator) &mdash; the effective token
 range is the same; see the `NOTE` in those files.
+
+</details>
+
+<details>
+<summary><strong>Repository layout</strong></summary>
 
 ## Directory Structure
 
@@ -93,15 +143,24 @@ BeatEdit/
 └── docs/                        # ENCODING_SPEC, TRAINING_OVERVIEW, METHOD_LevT, ...
 ```
 
-The subjective evaluation (paper's listening study) is showcased on the
-[demo page](https://haoyu-gu.github.io/BeatEdit/).
+</details>
+
+## Resources
+
+- **[Interactive demos](https://haoyu-gu.github.io/BeatEdit/)** — listen to correction, editing, and completion examples.
+- **[Paper](https://arxiv.org/abs/2607.11124)** — extended version with Appendices A–P.
+- **[Supplementary material](supplementary.pdf)** — standalone appendix PDF.
+- **[Conference poster](https://haoyu-gu.github.io/posters/beatedit/)** — view online; [PDF, PNG, and editable source](poster/) are also included here.
+- **Technical guides:** [Encoding](docs/ENCODING_SPEC.md) · [Training](docs/TRAINING_OVERVIEW.md) · [IterEdit](docs/METHOD_LevT.md).
 
 ## Quick Start
 
 ### 1. Setup
 ```bash
-pip install -r requirements.txt
-bash scripts/00_setup.sh
+git clone https://github.com/Haoyu-Gu/BeatEdit-code.git
+cd BeatEdit-code
+bash scripts/setup_env.sh
+source .venv/bin/activate
 ```
 
 ### 2. Data Preparation
@@ -208,8 +267,8 @@ make pipeline SCHEME=A DATA_DIR=/path/to/data   # train all methods for one sche
 `tools/encoding_demo.py` encodes any note spec under all four schemes and
 prints the token sequences next to each other &mdash; the quickest way to see how
 the 2×2 design (absolute/relative × separated/bundled) plays out, and to
-sanity-check round-trips. `tests/test_encoding.py` runs numpy-only encoding
-tests (also wired into CI).
+sanity-check round-trips. `tests/test_encoding.py` checks all four schemes
+(also wired into CI).
 
 **Model-size knobs.** The backbone can be resized without editing any config
 file &mdash; useful for pilot runs on small GPUs:
@@ -283,12 +342,12 @@ Training time estimates (2x GPU):
 ## Authors
 
 Haoyu Gu<sup>1</sup>, Lekai Qian<sup>1</sup>, Haowu Zhou<sup>1</sup>,
-Qi Liu<sup>1,\*</sup>, Shuai Wang<sup>2,\*</sup>
+Qi Liu<sup>1,*</sup>, Shuai Wang<sup>2,*</sup>
 
 <sup>1</sup> School of Future Technology, South China University of Technology, Guangzhou, China
 <sup>2</sup> School of Intelligence Science and Technology, Nanjing University, Suzhou, China
 
-<sup>\*</sup> Corresponding authors.
+<sup>*</sup> Corresponding authors.
 
 ## Citation
 
