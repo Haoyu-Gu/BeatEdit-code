@@ -1,25 +1,40 @@
-<div align="center">
+<h1 align="center">BeatEdit</h1>
 
-<h1>BeatEdit</h1>
-<h3>Symbolic Music Generation as Explicit Editing</h3>
-<p><strong>ACM Multimedia 2026</strong></p>
+<h2 align="center">Symbolic Music Generation as Explicit Editing</h2>
 
-<p>
-<a href="https://arxiv.org/abs/2607.11124"><img src="https://img.shields.io/badge/arXiv-2607.11124-B31B1B?style=for-the-badge" alt="Paper on arXiv"></a>
-<a href="https://haoyu-gu.github.io/BeatEdit/"><img src="https://img.shields.io/badge/Demo-Listen_%26_Explore-633A91?style=for-the-badge" alt="Interactive music demos"></a>
-<a href="https://haoyu-gu.github.io/posters/beatedit/"><img src="https://img.shields.io/badge/Poster-View_Online-422660?style=for-the-badge" alt="View the conference poster"></a>
-<a href="https://github.com/Haoyu-Gu/BeatEdit-code/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Haoyu-Gu/BeatEdit-code/ci.yml?branch=main&style=for-the-badge&label=Tests" alt="CI status"></a>
+<p align="center">
+  <b>ACM Multimedia 2026</b>
 </p>
 
-<p>
+<p align="center">
+  Haoyu Gu<sup>1</sup>, Lekai Qian<sup>1</sup>, Haowu Zhou<sup>1</sup>,
+  Qi Liu<sup>1,*</sup>, Shuai Wang<sup>2,*</sup>
+</p>
+
+<p align="center">
+  <sup>1</sup>South China University of Technology &nbsp;&middot;&nbsp;
+  <sup>2</sup>Nanjing University
+</p>
+
+<p align="center">
+  <sup>*</sup>Corresponding authors
+</p>
+
+<p align="center">
+  <a href="https://arxiv.org/abs/2607.11124"><img src="https://img.shields.io/badge/arXiv-2607.11124-b31b1b.svg" alt="arXiv"></a>
+  <a href="https://2026.acmmm.org/"><img src="https://img.shields.io/badge/Venue-ACM%20MM%202026-4b8bbe.svg" alt="ACM Multimedia 2026"></a>
+  <a href="https://haoyu-gu.github.io/BeatEdit/"><img src="https://img.shields.io/badge/Demo-Page-1f9c5a.svg" alt="Demo Page"></a>
+  <a href="https://haoyu-gu.github.io/posters/beatedit/"><img src="https://img.shields.io/badge/Poster-Online-633a91.svg" alt="Online Poster"></a>
+  <a href="https://github.com/Haoyu-Gu/BeatEdit-code/stargazers"><img src="https://img.shields.io/github/stars/Haoyu-Gu/BeatEdit-code?style=social" alt="GitHub stars"></a>
+</p>
+
+<p align="center">
 <a href="#quick-start">Quick Start</a> ·
 <a href="#how-it-works">How It Works</a> ·
 <a href="supplementary.pdf">Supplementary</a> ·
 <a href="poster/">Poster Files</a> ·
 <a href="#citation">Citation</a>
 </p>
-
-</div>
 
 ## Music creation is a process of revision
 
@@ -338,16 +353,6 @@ Training time estimates (2x GPU):
 - SeqTag: ~6-8h per scheme
 - IterEdit: ~10-15h
 - TagFill: ~8-10h per scheme (tagger) + ~8-10h (inserter)
-
-## Authors
-
-Haoyu Gu<sup>1</sup>, Lekai Qian<sup>1</sup>, Haowu Zhou<sup>1</sup>,
-Qi Liu<sup>1,*</sup>, Shuai Wang<sup>2,*</sup>
-
-<sup>1</sup> School of Future Technology, South China University of Technology, Guangzhou, China
-<sup>2</sup> School of Intelligence Science and Technology, Nanjing University, Suzhou, China
-
-<sup>*</sup> Corresponding authors.
 
 ## Citation
 
