@@ -241,7 +241,9 @@ class Token2MIDI:
             onset_positions = np.where(onset_roll[pitch_idx] > 0)[0]
             for onset_pos in onset_positions:
                 end_pos = onset_pos + 1
-                while end_pos < sustain_roll.shape[1] and sustain_roll[pitch_idx, end_pos] > 0:
+                while (end_pos < sustain_roll.shape[1]
+                       and sustain_roll[pitch_idx, end_pos] > 0
+                       and onset_roll[pitch_idx, end_pos] == 0):
                     end_pos += 1
                 note = pretty_midi.Note(
                     velocity=velocity,

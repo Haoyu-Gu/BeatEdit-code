@@ -36,6 +36,8 @@ def load_decoded_per_sample(reeval_full_path=None):
 
     lookup = {}
     for r in data:
+        if r.get('errors', 0):
+            raise ValueError("Cannot pair decoded scores from an incomplete evaluation")
         key = (r['task'], r['method'], r['scheme'])
         lookup[key] = r['new_per_sample']  # decoded beat_exact per sample
 
@@ -172,9 +174,9 @@ def main():
         scores_b = lookup[key_b]
 
         # Align sample counts
-        n = min(len(scores_a), len(scores_b))
-        scores_a = scores_a[:n]
-        scores_b = scores_b[:n]
+        if len(scores_a) != len(scores_b):
+            raise ValueError("Paired comparisons require equal, aligned sample counts")
+        n = len(scores_a)
 
         # Bootstrap
         r = paired_bootstrap_test(scores_a, scores_b, n_bootstrap=10000)

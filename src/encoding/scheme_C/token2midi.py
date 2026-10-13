@@ -494,7 +494,9 @@ class Token2MIDI:
                 end_pos = onset_pos + 1
 
                 # Keep searching forward until sustain ends
-                while end_pos < sustain_roll.shape[1] and sustain_roll[pitch_idx, end_pos] > 0:
+                while (end_pos < sustain_roll.shape[1]
+                       and sustain_roll[pitch_idx, end_pos] > 0
+                       and onset_roll[pitch_idx, end_pos] == 0):
                     end_pos += 1
 
                 # Convert to time (seconds)

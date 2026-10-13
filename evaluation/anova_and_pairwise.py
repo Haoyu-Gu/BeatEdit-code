@@ -9,70 +9,34 @@ Usage:
 
 import os
 import sys
-import json
 import argparse
 import numpy as np
 from itertools import combinations
-from collections import defaultdict
 
 UNIFIED_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, UNIFIED_DIR)
 
-from metrics import compute_all_metrics
-from scheme_utils import SchemeLoader
+from statistical_tests import get_per_sample_scores
 
 
 # ==================== Load per-sample scores ====================
 
-def load_per_sample_scores(task, method, scheme, scope='perturbed_only', metric='beat_exact_match'):
+def load_per_sample_scores(task, method, scheme, scope='perturbed_only',
+                           metric='beat_exact_match', results_dir=None,
+                           test_data_dir=None, predictions_dir=None):
     """Load per-sample scores from result JSON or recompute from test_data + predictions."""
-    result_path = os.path.join(UNIFIED_DIR, 'results', f'{task}_{method}_{scheme}_{scope}.json')
-    if os.path.exists(result_path):
-        with open(result_path) as f:
-            d = json.load(f)
-        if 'per_sample' in d:
-            return [s[metric] for s in d['per_sample'] if metric in s]
-
-    # Recompute from test_data + predictions
-    test_dir = os.path.join(UNIFIED_DIR, 'test_data', task, scheme)
-    pred_dir = os.path.join(UNIFIED_DIR, 'predictions', task, method, scheme)
-    if not os.path.isdir(test_dir) or not os.path.isdir(pred_dir):
-        return None
-
-    loader = SchemeLoader(scheme)
-    scores = []
-    for fname in sorted(os.listdir(test_dir)):
-        if not fname.endswith('.json'):
-            continue
-        pred_path = os.path.join(pred_dir, fname)
-        if not os.path.exists(pred_path):
-            continue
-
-        with open(os.path.join(test_dir, fname)) as f:
-            test = json.load(f)
-        with open(pred_path) as f:
-            pred = json.load(f)
-
-        target_tokens = test['target_tokens']
-        pred_tokens = pred.get('corrected_tokens', pred.get('predicted_tokens', pred.get('tokens', [])))
-        changed = test.get('changed_beat_indices', [])
-
-        if scope == 'perturbed_only' and changed:
-            metrics = compute_all_metrics(pred_tokens, target_tokens, loader, beat_indices=changed)
-        else:
-            metrics = compute_all_metrics(pred_tokens, target_tokens, loader)
-
-        if metric in metrics:
-            scores.append(metrics[metric])
-
-    return scores if scores else None
+    scores = get_per_sample_scores(
+        task, method, scheme, scope, results_dir=results_dir,
+        test_data_dir=test_data_dir, predictions_dir=predictions_dir,
+        from_results=True)
+    return scores.get(metric) if scores is not None else None
 
 
 # ==================== Two-way ANOVA ====================
 
 def two_way_anova(data_matrix, method_names, scheme_names):
     """
-    Two-way ANOVA (Method × Encoding) on per-sample means.
+    Balanced two-way ANOVA (Method × Encoding) with independent residuals.
     data_matrix: dict of (method, scheme) -> list of per-sample scores
     Returns F, p, eta² for each factor and interaction.
     """
@@ -82,6 +46,9 @@ def two_way_anova(data_matrix, method_names, scheme_names):
     schemes = scheme_names
     n_methods = len(methods)
     n_schemes = len(schemes)
+    if (n_methods < 2 or n_schemes < 2
+            or len(set(methods)) != n_methods or len(set(schemes)) != n_schemes):
+        raise ValueError("ANOVA requires at least two distinct methods and encodings")
 
     # Cell means and counts
     cell_means = {}
@@ -90,15 +57,15 @@ def two_way_anova(data_matrix, method_names, scheme_names):
     for m in methods:
         for s in schemes:
             key = (m, s)
-            scores = data_matrix.get(key, [])
-            if not scores:
-                print(f"  WARNING: no data for {m}×{s}")
-                cell_means[key] = 0
-                cell_ns[key] = 0
-            else:
-                cell_means[key] = np.mean(scores)
-                cell_ns[key] = len(scores)
-                all_scores.extend(scores)
+            scores = np.asarray(data_matrix.get(key, []), dtype=np.float64)
+            if scores.ndim != 1 or len(scores) < 2 or not np.isfinite(scores).all():
+                raise ValueError(f"ANOVA requires at least two finite scores for {m}×{s}")
+            cell_means[key] = np.mean(scores)
+            cell_ns[key] = len(scores)
+            all_scores.extend(scores)
+
+    if len(set(cell_ns.values())) != 1:
+        raise ValueError("This balanced ANOVA requires equal sample counts in every cell")
 
     grand_mean = np.mean(all_scores) if all_scores else 0
     N = len(all_scores)
@@ -142,7 +109,8 @@ def two_way_anova(data_matrix, method_names, scheme_names):
 
     # SS_total and SS_error
     ss_total = sum((x - grand_mean) ** 2 for x in all_scores)
-    ss_error = ss_total - ss_method - ss_scheme - ss_interaction
+    ss_error = sum(float(np.sum((np.asarray(data_matrix[key]) - mean) ** 2))
+                   for key, mean in cell_means.items())
 
     # Degrees of freedom
     df_method = n_methods - 1
@@ -158,8 +126,8 @@ def two_way_anova(data_matrix, method_names, scheme_names):
                           ('Method×Encoding', ss_interaction, df_interaction)]:
         ms = ss / df if df > 0 else 0
         ms_error = ss_error / df_error if df_error > 0 else 1
-        F = ms / ms_error if ms_error > 0 else 0
-        p = 1 - stats.f.cdf(F, df, df_error) if df > 0 and df_error > 0 else 1
+        F = ms / ms_error if ms_error > 0 else (float('inf') if ms > 0 else 0.0)
+        p = stats.f.sf(F, df, df_error)
         eta_sq = ss / ss_total if ss_total > 0 else 0
         results[name] = {
             'SS': round(float(ss), 4),
@@ -184,6 +152,10 @@ def two_way_anova(data_matrix, method_names, scheme_names):
 def paired_bootstrap(scores_a, scores_b, n_bootstrap=10000, seed=42):
     scores_a = np.array(scores_a, dtype=np.float64)
     scores_b = np.array(scores_b, dtype=np.float64)
+    if (scores_a.ndim != 1 or scores_b.ndim != 1
+            or len(scores_a) != len(scores_b) or len(scores_a) < 2
+            or not np.isfinite(scores_a).all() or not np.isfinite(scores_b).all()):
+        raise ValueError("Paired tests require equally sized, finite, aligned sample arrays")
     n = len(scores_a)
     diffs = scores_a - scores_b
     observed = float(np.mean(diffs))
@@ -229,6 +201,9 @@ def main():
     parser.add_argument('--schemes', type=str, default='A,B,C,D')
     parser.add_argument('--scope', type=str, default='perturbed_only')
     parser.add_argument('--metric', type=str, default='beat_exact_match')
+    parser.add_argument('--results_dir', type=str, default=None)
+    parser.add_argument('--test_data_dir', type=str, default=None)
+    parser.add_argument('--predictions_dir', type=str, default=None)
     parser.add_argument('--pairwise', type=str, default=None,
                         help='Pairwise comparisons, e.g. "gector_B:gector_C,levt_editing_v2_A:gector_B"')
     args = parser.parse_args()
@@ -240,7 +215,7 @@ def main():
         if args.task == 'correction':
             methods = ['gector', 'felix', 'levt_editing_v2']
         elif args.task == 'editing':
-            methods = ['gector', 'felix', 'no_edit']
+            methods = ['gector', 'felix', 'levt_editing_v2', 'no_edit']
         else:
             methods = ['felix', 'levt_editing_v2', 'no_edit']
     else:
@@ -261,7 +236,10 @@ def main():
     for m in methods:
         print(f"{m:20s} ", end='')
         for s in schemes:
-            scores = load_per_sample_scores(args.task, m, s, args.scope, args.metric)
+            scores = load_per_sample_scores(
+                args.task, m, s, args.scope, args.metric,
+                results_dir=args.results_dir, test_data_dir=args.test_data_dir,
+                predictions_dir=args.predictions_dir)
             if scores:
                 data_matrix[(m, s)] = scores
                 print(f"  {np.mean(scores):>8.4f}", end='')
@@ -314,10 +292,7 @@ def main():
                 print(f"\n  {a_str} vs {b_str}: MISSING DATA")
                 continue
 
-            # Align sample counts
-            n = min(len(scores_a), len(scores_b))
-            scores_a = scores_a[:n]
-            scores_b = scores_b[:n]
+            n = len(scores_a)
 
             boot = paired_bootstrap(scores_a, scores_b)
             wilcox_p = wilcoxon_test(scores_a, scores_b)

@@ -148,11 +148,13 @@ def load_per_sample_from_results(results_dir, task, method, scheme, scope='pertu
 
     with open(fpath) as f:
         data = json.load(f)
+    if data.get('num_errors', 0):
+        raise ValueError(f"Cannot use incomplete evaluation for statistical tests: {fpath}")
 
     overall = data.get('overall', {})
     per_sample = {}
     for key, entry in overall.items():
-        if 'per_sample' in entry:
+        if isinstance(entry, dict) and 'per_sample' in entry:
             per_sample[key] = entry['per_sample']
 
     if not per_sample:
@@ -168,7 +170,7 @@ def compute_per_sample_scores(task, method, scheme, scope='perturbed_only',
     """
     import glob as glob_mod
     from scheme_utils import SchemeLoader
-    from metrics import compute_all_metrics
+    from metrics import align_beats, compute_all_metrics
 
     if test_data_dir is None:
         test_data_dir = os.path.join(UNIFIED_DIR, 'test_data', task)
@@ -193,7 +195,7 @@ def compute_per_sample_scores(task, method, scheme, scope='perturbed_only',
         pred_path = os.path.join(pred_dir, fname)
 
         if not os.path.exists(pred_path):
-            continue
+            raise FileNotFoundError(f"Statistical tests require every prediction: {pred_path}")
 
         with open(fpath) as f:
             test_data = json.load(f)
@@ -211,21 +213,19 @@ def compute_per_sample_scores(task, method, scheme, scope='perturbed_only',
             _, pred_accomp = loader.separate_tracks(pred_parsed)
 
             if scope == 'perturbed_only' and len(changed_indices) > 0:
-                n = min(len(pred_accomp), len(tgt_accomp))
-                pred_filtered = [pred_accomp[i] for i in range(n) if i in changed_indices]
-                tgt_filtered = [tgt_accomp[i] for i in range(n) if i in changed_indices]
+                pred_filtered, tgt_filtered = align_beats(
+                    pred_accomp, tgt_accomp, changed_indices)
                 changed_mask = [True] * len(pred_filtered)
             else:
-                pred_filtered = pred_accomp
-                tgt_filtered = tgt_accomp
-                changed_mask = [i in changed_indices for i in range(min(len(pred_accomp), len(tgt_accomp)))]
+                pred_filtered, tgt_filtered = align_beats(pred_accomp, tgt_accomp)
+                changed_mask = [i in changed_indices for i in range(len(tgt_filtered))]
 
             m = compute_all_metrics(pred_filtered, tgt_filtered, decode_fn,
                                     changed_mask=changed_mask if scope == 'full_sequence' else None)
             per_sample_metrics.append(m)
 
         except Exception as e:
-            continue
+            raise ValueError(f"Cannot score statistical-test sample {fname}") from e
 
     if not per_sample_metrics:
         return None
@@ -298,12 +298,12 @@ def compare_methods(task, method_a, method_b, schemes, scope='perturbed_only',
             sa = scores_a[metric]
             sb = scores_b[metric]
 
-            # Ensure same length (should be if same test set)
-            n = min(len(sa), len(sb))
+            if len(sa) != len(sb):
+                raise ValueError(f"Paired samples must match for {scheme}/{metric}: "
+                                 f"{len(sa)} vs {len(sb)}")
+            n = len(sa)
             if n < 2:
                 continue
-            sa = sa[:n]
-            sb = sb[:n]
 
             # Run tests
             boot_result = paired_bootstrap_test(sa, sb, n_bootstrap=n_bootstrap)

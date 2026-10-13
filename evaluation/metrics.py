@@ -18,11 +18,27 @@ Diagnostics (appendix):
 
 import numpy as np
 import collections
+from itertools import zip_longest
 from scipy import linalg as scipy_linalg
 from sklearn.covariance import LedoitWolf
 
 
 # ==================== Beat-level exact match ====================
+
+def align_beats(pred_beats, tgt_beats, beat_indices=None):
+    """Align by beat index, retaining absent beats as None (not empty beats).
+
+    A scoped evaluation also retains surplus prediction beats, which cannot
+    correspond to any requested target region.
+    """
+    pairs = [(pred, tgt) for i, (pred, tgt) in
+             enumerate(zip_longest(pred_beats, tgt_beats))
+             if beat_indices is None or i in beat_indices or i >= len(tgt_beats)]
+    return ([pred for pred, _ in pairs], [tgt for _, tgt in pairs])
+
+
+def _tokens(beat):
+    return beat['tokens'] if beat is not None else []
 
 def beat_exact_match(pred_beats, tgt_beats):
     """
@@ -35,10 +51,12 @@ def beat_exact_match(pred_beats, tgt_beats):
     Returns:
         float: fraction of beats that are exactly identical
     """
-    n = min(len(pred_beats), len(tgt_beats))
+    n = max(len(pred_beats), len(tgt_beats))
     if n == 0:
         return 0.0
-    matches = sum(1 for i in range(n) if pred_beats[i]['tokens'] == tgt_beats[i]['tokens'])
+    matches = sum(pred is not None and tgt is not None and
+                  pred['tokens'] == tgt['tokens']
+                  for pred, tgt in zip_longest(pred_beats, tgt_beats))
     return matches / n
 
 
@@ -65,10 +83,9 @@ def note_f1(pred_beats, tgt_beats, decode_fn, tol=0):
     total_fp = 0
     total_fn = 0
 
-    n = min(len(pred_beats), len(tgt_beats))
-    for i in range(n):
-        pred_notes = decode_fn(pred_beats[i]['tokens'])
-        tgt_notes = decode_fn(tgt_beats[i]['tokens'])
+    for pred, tgt in zip_longest(pred_beats, tgt_beats):
+        pred_notes = decode_fn(_tokens(pred))
+        tgt_notes = decode_fn(_tokens(tgt))
 
         pred_pitches = [p for p, v in pred_notes]
         tgt_pitches = [p for p, v in tgt_notes]
@@ -118,10 +135,9 @@ def mean_pitch_error(pred_beats, tgt_beats, decode_fn):
     total_error = 0.0
     total_count = 0
 
-    n = min(len(pred_beats), len(tgt_beats))
-    for i in range(n):
-        pred_notes = decode_fn(pred_beats[i]['tokens'])
-        tgt_notes = decode_fn(tgt_beats[i]['tokens'])
+    for pred, tgt in zip_longest(pred_beats, tgt_beats):
+        pred_notes = decode_fn(_tokens(pred))
+        tgt_notes = decode_fn(_tokens(tgt))
 
         pred_pitches = sorted([p for p, v in pred_notes])
         tgt_pitches = sorted([p for p, v in tgt_notes])
@@ -151,10 +167,9 @@ def chroma_f1(pred_beats, tgt_beats, decode_fn):
     total_fp = 0
     total_fn = 0
 
-    n = min(len(pred_beats), len(tgt_beats))
-    for i in range(n):
-        pred_notes = decode_fn(pred_beats[i]['tokens'])
-        tgt_notes = decode_fn(tgt_beats[i]['tokens'])
+    for pred, tgt in zip_longest(pred_beats, tgt_beats):
+        pred_notes = decode_fn(_tokens(pred))
+        tgt_notes = decode_fn(_tokens(tgt))
 
         # pitch 0-87, MIDI = pitch+21, chroma = (pitch+21)%12
         pred_chromas = set((p + 21) % 12 for p, v in pred_notes)
@@ -181,11 +196,10 @@ def rhythm_similarity(pred_beats, tgt_beats, decode_fn):
     pred_dist = collections.Counter()
     tgt_dist = collections.Counter()
 
-    n = min(len(pred_beats), len(tgt_beats))
-    for i in range(n):
-        for p, v in decode_fn(pred_beats[i]['tokens']):
+    for pred, tgt in zip_longest(pred_beats, tgt_beats):
+        for p, v in decode_fn(_tokens(pred)):
             pred_dist[v] += 1
-        for p, v in decode_fn(tgt_beats[i]['tokens']):
+        for p, v in decode_fn(_tokens(tgt)):
             tgt_dist[v] += 1
 
     all_keys = set(pred_dist.keys()) | set(tgt_dist.keys())
@@ -208,13 +222,12 @@ def token_accuracy(pred_beats, tgt_beats, decode_fn):
     """Decoded note set intersection metric."""
     total = 0
     correct = 0
-    n = min(len(pred_beats), len(tgt_beats))
-    for i in range(n):
-        pred_notes = set(decode_fn(pred_beats[i]['tokens']))
-        tgt_notes = set(decode_fn(tgt_beats[i]['tokens']))
+    for pred, tgt in zip_longest(pred_beats, tgt_beats):
+        pred_notes = set(decode_fn(_tokens(pred)))
+        tgt_notes = set(decode_fn(_tokens(tgt)))
         if len(tgt_notes) == 0 and len(pred_notes) == 0:
             total += 1
-            correct += 1
+            correct += int(pred is not None and tgt is not None)
         else:
             total += max(len(tgt_notes), 1)
             correct += len(pred_notes & tgt_notes)
@@ -237,11 +250,13 @@ def context_preservation(pred_beats, tgt_beats, changed_mask):
     """
     total = 0
     preserved = 0
-    n = min(len(pred_beats), len(tgt_beats), len(changed_mask))
-    for i in range(n):
+    n = max(len(pred_beats), len(tgt_beats))
+    if len(changed_mask) != n:
+        raise ValueError("changed_mask must cover every aligned beat")
+    for i, (pred, tgt) in enumerate(zip_longest(pred_beats, tgt_beats)):
         if not changed_mask[i]:
             total += 1
-            if pred_beats[i]['tokens'] == tgt_beats[i]['tokens']:
+            if pred is not None and tgt is not None and pred['tokens'] == tgt['tokens']:
                 preserved += 1
     return preserved / max(total, 1)
 

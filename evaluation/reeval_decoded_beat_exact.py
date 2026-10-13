@@ -23,6 +23,7 @@ UNIFIED_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, UNIFIED_DIR)
 
 from scheme_utils import SchemeLoader
+from metrics import align_beats, beat_exact_match
 
 # ==================== Methods to evaluate ====================
 
@@ -70,11 +71,14 @@ def decoded_beat_exact_match(pred_beats, tgt_beats, decode_fn):
 
     Returns: fraction of beats that match exactly in note space.
     """
-    n = min(len(pred_beats), len(tgt_beats))
+    pred_beats, tgt_beats = align_beats(pred_beats, tgt_beats)
+    n = len(tgt_beats)
     if n == 0:
         return 0.0
     matches = 0
     for i in range(n):
+        if pred_beats[i] is None or tgt_beats[i] is None:
+            continue
         pred_notes = sorted(decode_fn(pred_beats[i]['tokens']))
         tgt_notes = sorted(decode_fn(tgt_beats[i]['tokens']))
         if pred_notes == tgt_notes:
@@ -84,11 +88,7 @@ def decoded_beat_exact_match(pred_beats, tgt_beats, decode_fn):
 
 def token_beat_exact_match(pred_beats, tgt_beats):
     """Original token-space beat exact match (for comparison)."""
-    n = min(len(pred_beats), len(tgt_beats))
-    if n == 0:
-        return 0.0
-    matches = sum(1 for i in range(n) if pred_beats[i]['tokens'] == tgt_beats[i]['tokens'])
-    return matches / n
+    return beat_exact_match(pred_beats, tgt_beats)
 
 
 def evaluate_one(test_path, pred_path, loader, scope='perturbed_only', task='editing'):
@@ -108,13 +108,13 @@ def evaluate_one(test_path, pred_path, loader, scope='perturbed_only', task='edi
     _, pred_accomp = loader.separate_tracks(pred_parsed)
 
     if scope == 'perturbed_only' and len(changed_indices) > 0:
-        n = min(len(pred_accomp), len(tgt_accomp))
+        pred_accomp, tgt_accomp = align_beats(pred_accomp, tgt_accomp, changed_indices)
+        n = len(tgt_accomp)
         pred_filtered = []
         tgt_filtered = []
         for i in range(n):
-            if i not in changed_indices:
-                continue
-            if task == 'inpainting' and len(tgt_accomp[i]['tokens']) == 0:
+            if (task == 'inpainting' and tgt_accomp[i] is not None
+                    and len(tgt_accomp[i]['tokens']) == 0):
                 continue  # target beat is empty — not a real perturbation
             pred_filtered.append(pred_accomp[i])
             tgt_filtered.append(tgt_accomp[i])
@@ -136,8 +136,8 @@ def evaluate_method_scheme(task, method, scheme, scope='perturbed_only'):
 
     if not os.path.exists(pred_dir):
         return None
-    pred_files = glob.glob(os.path.join(pred_dir, '*.json'))
-    if len(pred_files) == 0:
+    test_files = glob.glob(os.path.join(test_dir, '*.json'))
+    if len(test_files) == 0:
         return None
 
     loader = SchemeLoader(scheme)
@@ -146,10 +146,10 @@ def evaluate_method_scheme(task, method, scheme, scope='perturbed_only'):
     new_scores = []
     errors = 0
 
-    for pred_path in sorted(pred_files):
-        fname = os.path.basename(pred_path)
-        test_path = os.path.join(test_dir, fname)
-        if not os.path.exists(test_path):
+    for test_path in sorted(test_files):
+        fname = os.path.basename(test_path)
+        pred_path = os.path.join(pred_dir, fname)
+        if not os.path.exists(pred_path):
             errors += 1
             continue
         try:

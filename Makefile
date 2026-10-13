@@ -29,6 +29,7 @@ verify: compile-check
 	$(PY) tools/encoding_demo.py
 	$(PY) tests/test_encoding.py
 	$(PY) tests/test_release_protocol.py
+	$(PY) tests/test_evaluation.py
 	$(PY) tests/test_iteredit_model.py
 	$(PY) tests/test_data_prep.py
 	$(PY) evaluation/verify_filter_roundtrip.py --n 200 --scheme A

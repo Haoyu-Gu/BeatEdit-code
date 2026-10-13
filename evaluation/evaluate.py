@@ -46,6 +46,7 @@ sys.path.insert(0, UNIFIED_DIR)
 
 from scheme_utils import SchemeLoader, SCHEME_INFO
 from metrics import (
+    align_beats,
     beat_exact_match, note_f1, mean_pitch_error, chroma_f1,
     rhythm_similarity, token_accuracy, context_preservation,
     compute_all_metrics, compute_fmd, safe_aggregate,
@@ -148,28 +149,17 @@ def evaluate_method_scheme(method, scheme, test_data_dir, predictions_dir,
             _, pred_accomp = loader.separate_tracks(pred_parsed)
 
             if scope == 'perturbed_only' and len(changed_indices) > 0:
-                # Filter to only perturbed beats
-                n = min(len(pred_accomp), len(tgt_accomp))
-                pred_filtered = [pred_accomp[i] for i in range(n) if i in changed_indices]
-                tgt_filtered = [tgt_accomp[i] for i in range(n) if i in changed_indices]
+                pred_filtered, tgt_filtered = align_beats(
+                    pred_accomp, tgt_accomp, changed_indices)
 
                 # Also build changed_mask for context_preservation (all True in filtered)
                 changed_mask = [True] * len(pred_filtered)
             else:
-                pred_filtered = pred_accomp
-                tgt_filtered = tgt_accomp
-                changed_mask = [i in changed_indices for i in range(min(len(pred_accomp), len(tgt_accomp)))]
+                pred_filtered, tgt_filtered = align_beats(pred_accomp, tgt_accomp)
+                changed_mask = [i in changed_indices for i in range(len(tgt_filtered))]
 
             m = compute_all_metrics(pred_filtered, tgt_filtered, decode_fn,
                                     changed_mask=changed_mask if scope == 'full_sequence' else None)
-
-            # Context preservation (only meaningful for full_sequence)
-            if scope == 'full_sequence':
-                cp_mask = [i not in changed_indices for i in range(min(len(pred_accomp), len(tgt_accomp)))]
-                n_unchanged = sum(cp_mask)
-                n_preserved = sum(1 for i in range(min(len(pred_accomp), len(tgt_accomp)))
-                                  if cp_mask[i] and pred_accomp[i]['tokens'] == tgt_accomp[i]['tokens'])
-                m['context_preservation'] = n_preserved / max(n_unchanged, 1)
 
             m['level'] = level
             all_metrics.append(m)
