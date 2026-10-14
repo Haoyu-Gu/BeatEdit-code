@@ -10,6 +10,7 @@ Usage:
 import os
 import sys
 import argparse
+import json
 import numpy as np
 from itertools import combinations
 
@@ -17,18 +18,19 @@ UNIFIED_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, UNIFIED_DIR)
 
 from statistical_tests import get_per_sample_scores
+from protocol import require_paired_samples, scoring_protocol
 
 
 # ==================== Load per-sample scores ====================
 
 def load_per_sample_scores(task, method, scheme, scope='perturbed_only',
                            metric='beat_exact_match', results_dir=None,
-                           test_data_dir=None, predictions_dir=None):
+                           test_data_dir=None, predictions_dir=None, metric_space='token'):
     """Load per-sample scores from result JSON or recompute from test_data + predictions."""
     scores = get_per_sample_scores(
         task, method, scheme, scope, results_dir=results_dir,
         test_data_dir=test_data_dir, predictions_dir=predictions_dir,
-        from_results=True)
+        from_results=True, metric_space=metric_space)
     return scores.get(metric) if scores is not None else None
 
 
@@ -201,6 +203,7 @@ def main():
     parser.add_argument('--schemes', type=str, default='A,B,C,D')
     parser.add_argument('--scope', type=str, default='perturbed_only')
     parser.add_argument('--metric', type=str, default='beat_exact_match')
+    parser.add_argument('--metric_space', choices=['token', 'decoded'], default='token')
     parser.add_argument('--results_dir', type=str, default=None)
     parser.add_argument('--test_data_dir', type=str, default=None)
     parser.add_argument('--predictions_dir', type=str, default=None)
@@ -239,7 +242,7 @@ def main():
             scores = load_per_sample_scores(
                 args.task, m, s, args.scope, args.metric,
                 results_dir=args.results_dir, test_data_dir=args.test_data_dir,
-                predictions_dir=args.predictions_dir)
+                predictions_dir=args.predictions_dir, metric_space=args.metric_space)
             if scores:
                 data_matrix[(m, s)] = scores
                 print(f"  {np.mean(scores):>8.4f}", end='')
@@ -293,7 +296,7 @@ def main():
                 continue
 
             n = len(scores_a)
-
+            require_paired_samples(scores_a, scores_b)
             boot = paired_bootstrap(scores_a, scores_b)
             wilcox_p = wilcoxon_test(scores_a, scores_b)
 
@@ -312,13 +315,18 @@ def main():
         'task': args.task,
         'metric': args.metric,
         'scope': args.scope,
+        'metric_space': args.metric_space,
+        'scoring_protocol': scoring_protocol(args.metric_space),
         'methods': methods,
         'schemes': schemes,
+        'cell_counts': {f'{m}_{s}': len(scores) for (m, s), scores in data_matrix.items()},
         'cell_means': {f"{m}_{s}": round(float(np.mean(data_matrix[(m, s)])), 4)
                        for m, s in data_matrix},
         'anova': anova,
     }
-    out_path = os.path.join(UNIFIED_DIR, 'results', f'{args.task}_anova_{args.scope}.json')
+    out_dir = args.results_dir or os.path.join(UNIFIED_DIR, 'results')
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, f'{args.task}_anova_{args.scope}.json')
     with open(out_path, 'w') as f:
         json.dump(output, f, indent=2)
     print(f"\nSaved to {out_path}")

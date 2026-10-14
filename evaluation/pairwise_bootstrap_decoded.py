@@ -3,7 +3,7 @@
 Pairwise bootstrap significance tests on decoded beat_exact_match.
 
 Uses per-sample decoded beat_exact from reeval_decoded_beat_exact.py output,
-NOT the token-space beat_exact_match from evaluate.py.
+with the same decoded scoring protocol available via evaluate.py --metric_space decoded.
 
 Usage:
     python \
@@ -15,6 +15,7 @@ import sys
 import json
 import numpy as np
 from scipy.stats import wilcoxon
+from protocol import scores_from_result, require_paired_samples
 
 UNIFIED_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -36,10 +37,15 @@ def load_decoded_per_sample(reeval_full_path=None):
 
     lookup = {}
     for r in data:
-        if r.get('errors', 0):
-            raise ValueError("Cannot pair decoded scores from an incomplete evaluation")
         key = (r['task'], r['method'], r['scheme'])
-        lookup[key] = r['new_per_sample']  # decoded beat_exact per sample
+        normalized = dict(r, num_errors=r.get('errors'), num_samples=r.get('n'),
+                          overall={'beat_exact_match': {
+                              'per_sample': r['new_per_sample'], 'n': r['n'],
+                              'sample_ids': [s['sample_id'] for s in r.get('samples', [])]}})
+        scores = scores_from_result(normalized, *key, r['scope'], 'decoded')
+        if key in lookup:
+            raise ValueError(f'Duplicate decoded result: {key}')
+        lookup[key] = scores['beat_exact_match']
 
     return lookup
 
@@ -172,6 +178,7 @@ def main():
 
         scores_a = lookup[key_a]
         scores_b = lookup[key_b]
+        require_paired_samples(scores_a, scores_b)
 
         # Align sample counts
         if len(scores_a) != len(scores_b):
@@ -203,6 +210,9 @@ def main():
               f"{r['p']:>7.4f} {r['cohens_d']:>+6.3f} {r['n']:>4d} {sig}")
 
         result_entry = {
+            'scoring_protocol': scores_a.protocol,
+            'scope': scores_a.scope,
+            'sample_ids': [record['sample_id'] for record in scores_a.records],
             'comparison': label,
             'task': task,
             'method_a': m_a,

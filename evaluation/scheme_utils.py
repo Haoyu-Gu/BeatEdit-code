@@ -391,14 +391,16 @@ class SchemeLoader:
 
 # ==================== Test file selection ====================
 
-def get_test_files(data_dir=DATA_DIR, test_ratio=0.05, seed=42):
+def get_test_files(data_dir=DATA_DIR, test_ratio=0.10, seed=42):
     """
     Get the fixed list of test files.
-    Same logic as soft_eval_all.py get_test_files().
+    Held-out test partition of the seeded song-level 80/10/10 split.
     """
     all_files = sorted([f for f in os.listdir(data_dir) if f.endswith('.npz')])
     rng = np.random.RandomState(seed)
     indices = np.arange(len(all_files))
     rng.shuffle(indices)
     test_size = int(len(all_files) * test_ratio)
+    if not 0 < test_ratio < 1 or not 0 < test_size < len(all_files):
+        raise ValueError('Need a nonempty held-out test partition')
     return [all_files[i] for i in indices[-test_size:]]

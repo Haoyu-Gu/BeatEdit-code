@@ -23,7 +23,8 @@ UNIFIED_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, UNIFIED_DIR)
 
 from scheme_utils import SchemeLoader
-from metrics import align_beats, beat_exact_match
+from metrics import select_beats, beat_exact_match, decoded_beat_exact_match
+from protocol import scoring_protocol, sample_record
 
 # ==================== Methods to evaluate ====================
 
@@ -60,32 +61,6 @@ TASK_METHODS = {
 SCHEMES = ['A', 'B', 'C', 'D']
 
 
-def decoded_beat_exact_match(pred_beats, tgt_beats, decode_fn):
-    """
-    Beat-level exact match in decoded note space.
-
-    For each beat:
-      1. Decode tokens -> list of (abs_pitch, patch_value)
-      2. Sort the list
-      3. Compare sorted lists
-
-    Returns: fraction of beats that match exactly in note space.
-    """
-    pred_beats, tgt_beats = align_beats(pred_beats, tgt_beats)
-    n = len(tgt_beats)
-    if n == 0:
-        return 0.0
-    matches = 0
-    for i in range(n):
-        if pred_beats[i] is None or tgt_beats[i] is None:
-            continue
-        pred_notes = sorted(decode_fn(pred_beats[i]['tokens']))
-        tgt_notes = sorted(decode_fn(tgt_beats[i]['tokens']))
-        if pred_notes == tgt_notes:
-            matches += 1
-    return matches / n
-
-
 def token_beat_exact_match(pred_beats, tgt_beats):
     """Original token-space beat exact match (for comparison)."""
     return beat_exact_match(pred_beats, tgt_beats)
@@ -107,20 +82,8 @@ def evaluate_one(test_path, pred_path, loader, scope='perturbed_only', task='edi
     _, tgt_accomp = loader.separate_tracks(tgt_parsed)
     _, pred_accomp = loader.separate_tracks(pred_parsed)
 
-    if scope == 'perturbed_only' and len(changed_indices) > 0:
-        pred_accomp, tgt_accomp = align_beats(pred_accomp, tgt_accomp, changed_indices)
-        n = len(tgt_accomp)
-        pred_filtered = []
-        tgt_filtered = []
-        for i in range(n):
-            if (task == 'inpainting' and tgt_accomp[i] is not None
-                    and len(tgt_accomp[i]['tokens']) == 0):
-                continue  # target beat is empty — not a real perturbation
-            pred_filtered.append(pred_accomp[i])
-            tgt_filtered.append(tgt_accomp[i])
-    else:
-        pred_filtered = pred_accomp
-        tgt_filtered = tgt_accomp
+    pred_filtered, tgt_filtered = select_beats(
+        pred_accomp, tgt_accomp, changed_indices, scope)
 
     decode_fn = loader.decode_beat
     old_score = token_beat_exact_match(pred_filtered, tgt_filtered)
@@ -145,6 +108,7 @@ def evaluate_method_scheme(task, method, scheme, scope='perturbed_only'):
     old_scores = []
     new_scores = []
     errors = 0
+    samples = []
 
     for test_path in sorted(test_files):
         fname = os.path.basename(test_path)
@@ -154,6 +118,8 @@ def evaluate_method_scheme(task, method, scheme, scope='perturbed_only'):
             continue
         try:
             old_s, new_s = evaluate_one(test_path, pred_path, loader, scope, task=task)
+            with open(test_path) as f:
+                samples.append(sample_record(test_path, pred_path, json.load(f), loader))
             old_scores.append(old_s)
             new_scores.append(new_s)
         except Exception as e:
@@ -167,6 +133,8 @@ def evaluate_method_scheme(task, method, scheme, scope='perturbed_only'):
         'method': method,
         'scheme': scheme,
         'scope': scope,
+        'scoring_protocol': scoring_protocol('decoded'),
+        'samples': samples,
         'n': len(old_scores),
         'errors': errors,
         'beat_exact_token': round(float(np.mean(old_scores)), 4),
@@ -174,8 +142,8 @@ def evaluate_method_scheme(task, method, scheme, scope='perturbed_only'):
         'beat_exact_token_std': round(float(np.std(old_scores)), 4),
         'beat_exact_decoded_std': round(float(np.std(new_scores)), 4),
         'diff': round(float(np.mean(new_scores)) - float(np.mean(old_scores)), 4),
-        'old_per_sample': [round(x, 4) for x in old_scores],
-        'new_per_sample': [round(x, 4) for x in new_scores],
+        'old_per_sample': old_scores,
+        'new_per_sample': new_scores,
     }
 
 

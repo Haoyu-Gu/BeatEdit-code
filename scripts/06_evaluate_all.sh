@@ -12,6 +12,7 @@ TEST_DATA_DIR="${TEST_DATA_DIR:-$REPO_DIR/evaluation/test_data}"
 PREDICTIONS_DIR="${PREDICTIONS_DIR:-$REPO_DIR/evaluation/predictions}"
 SCHEMES="${SCHEMES:-A,B,C,D}"
 DEVICE="${DEVICE:-cuda}"
+METRIC_SPACE="${METRIC_SPACE:-decoded}"
 for task in correction editing inpainting; do
     if [ "$task" = inpainting ]; then
         methods="${INPAINTING_METHODS:-no_edit,copy_ctx,cmlm,felix,levt_inpainting}"
@@ -22,10 +23,13 @@ for task in correction editing inpainting; do
         --task "$task" --schemes "$SCHEMES" --methods "$methods" \
         --test_data_dir "$TEST_DATA_DIR/$task" --predictions_dir "$PREDICTIONS_DIR" \
         --output_dir "$RESULTS_DIR" --scope perturbed_only \
+        --metric_space "$METRIC_SPACE" \
         --per_sample --n_bootstrap 10000 --compute_fmd --device "$DEVICE" --strict
     "$PYTHON" "$REPO_DIR/evaluation/statistical_tests.py" \
         --task "$task" --schemes "$SCHEMES" --methods "$methods" --all_pairs \
         --from_results --results_dir "$RESULTS_DIR" --n_bootstrap 10000 \
+        --metric_space "$METRIC_SPACE" \
+        --test_data_dir "$TEST_DATA_DIR/$task" --predictions_dir "$PREDICTIONS_DIR/$task" \
         --output "$RESULTS_DIR/significance/${task}_pairwise.json"
 done
 PYTHON="$PYTHON" bash "$REPO_DIR/scripts/07_generate_tables.sh" "$RESULTS_DIR"

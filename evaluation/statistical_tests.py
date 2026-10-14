@@ -32,6 +32,7 @@ import json
 import argparse
 import numpy as np
 from itertools import combinations
+from protocol import scores_from_result, require_paired_samples
 
 UNIFIED_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, UNIFIED_DIR)
@@ -135,7 +136,8 @@ def wilcoxon_test(scores_a, scores_b):
 
 # ==================== Per-sample score extraction ====================
 
-def load_per_sample_from_results(results_dir, task, method, scheme, scope='perturbed_only'):
+def load_per_sample_from_results(results_dir, task, method, scheme, scope='perturbed_only',
+                                 metric_space='token', test_data_dir=None, predictions_dir=None):
     """
     Load per-sample scores from a result JSON that was generated with --per_sample.
 
@@ -148,102 +150,40 @@ def load_per_sample_from_results(results_dir, task, method, scheme, scope='pertu
 
     with open(fpath) as f:
         data = json.load(f)
-    if data.get('num_errors', 0):
-        raise ValueError(f"Cannot use incomplete evaluation for statistical tests: {fpath}")
-
-    overall = data.get('overall', {})
-    per_sample = {}
-    for key, entry in overall.items():
-        if isinstance(entry, dict) and 'per_sample' in entry:
-            per_sample[key] = entry['per_sample']
-
-    if not per_sample:
-        return None
-    return per_sample
+    return scores_from_result(data, task, method, scheme, scope, metric_space,
+                              test_data_dir, predictions_dir)
 
 
 def compute_per_sample_scores(task, method, scheme, scope='perturbed_only',
-                               test_data_dir=None, predictions_dir=None):
+                               test_data_dir=None, predictions_dir=None, metric_space='token'):
     """
     Recompute per-sample scores from test data and predictions.
     This is a fallback when --per_sample was not used during evaluate.py.
     """
-    import glob as glob_mod
-    from scheme_utils import SchemeLoader
-    from metrics import align_beats, compute_all_metrics
+    from evaluate import evaluate_method_scheme
 
     if test_data_dir is None:
         test_data_dir = os.path.join(UNIFIED_DIR, 'test_data', task)
     if predictions_dir is None:
         predictions_dir = os.path.join(UNIFIED_DIR, 'predictions', task)
 
-    test_dir = os.path.join(test_data_dir, scheme)
-    pred_dir = os.path.join(predictions_dir, method, scheme)
-
-    if not os.path.exists(pred_dir):
-        print(f"  No predictions for {method}/{scheme}")
+    # Use exactly the same scorer and selection policy as the public evaluator.
+    from pathlib import Path
+    for path in sorted((Path(test_data_dir) / scheme).glob('*.json')):
+        pred_path = Path(predictions_dir) / method / scheme / path.name
+        if not pred_path.is_file():
+            raise FileNotFoundError(f'Statistical tests require every prediction: {pred_path}')
+    result = evaluate_method_scheme(
+        method, scheme, test_data_dir, predictions_dir, scope=scope, task=task,
+        include_per_sample=True, include_ci=False, metric_space=metric_space)
+    if result is None:
         return None
-
-    loader = SchemeLoader(scheme)
-    decode_fn = loader.decode_beat
-
-    test_files = sorted(glob_mod.glob(os.path.join(test_dir, '*.json')))
-    per_sample_metrics = []
-
-    for fpath in test_files:
-        fname = os.path.basename(fpath)
-        pred_path = os.path.join(pred_dir, fname)
-
-        if not os.path.exists(pred_path):
-            raise FileNotFoundError(f"Statistical tests require every prediction: {pred_path}")
-
-        with open(fpath) as f:
-            test_data = json.load(f)
-        with open(pred_path) as f:
-            pred_data = json.load(f)
-
-        target_tokens = test_data['target_tokens']
-        pred_tokens = pred_data['pred_tokens']
-        changed_indices = set(test_data['changed_beat_indices'])
-
-        try:
-            tgt_parsed = loader.parse_sequence(target_tokens)
-            pred_parsed = loader.parse_sequence(pred_tokens)
-            _, tgt_accomp = loader.separate_tracks(tgt_parsed)
-            _, pred_accomp = loader.separate_tracks(pred_parsed)
-
-            if scope == 'perturbed_only' and len(changed_indices) > 0:
-                pred_filtered, tgt_filtered = align_beats(
-                    pred_accomp, tgt_accomp, changed_indices)
-                changed_mask = [True] * len(pred_filtered)
-            else:
-                pred_filtered, tgt_filtered = align_beats(pred_accomp, tgt_accomp)
-                changed_mask = [i in changed_indices for i in range(len(tgt_filtered))]
-
-            m = compute_all_metrics(pred_filtered, tgt_filtered, decode_fn,
-                                    changed_mask=changed_mask if scope == 'full_sequence' else None)
-            per_sample_metrics.append(m)
-
-        except Exception as e:
-            raise ValueError(f"Cannot score statistical-test sample {fname}") from e
-
-    if not per_sample_metrics:
-        return None
-
-    # Convert list-of-dicts to dict-of-lists
-    result = {}
-    for key in per_sample_metrics[0].keys():
-        values = [m.get(key) for m in per_sample_metrics
-                  if m.get(key) is not None and np.isfinite(m.get(key, float('nan')))]
-        if values:
-            result[key] = values
-
-    return result
+    return scores_from_result(result, task, method, scheme, scope, metric_space)
 
 
 def get_per_sample_scores(task, method, scheme, scope='perturbed_only',
                            results_dir=None, test_data_dir=None, predictions_dir=None,
-                           from_results=False):
+                           from_results=False, metric_space='token'):
     """
     Get per-sample scores, either from saved results or by recomputing.
     """
@@ -251,20 +191,22 @@ def get_per_sample_scores(task, method, scheme, scope='perturbed_only',
         results_dir = os.path.join(UNIFIED_DIR, 'results')
 
     if from_results:
-        scores = load_per_sample_from_results(results_dir, task, method, scheme, scope)
+        scores = load_per_sample_from_results(
+            results_dir, task, method, scheme, scope, metric_space,
+            test_data_dir, predictions_dir)
         if scores is not None:
             return scores
         print(f"  Warning: no per_sample data in results for {method}/{scheme}, recomputing...")
 
     return compute_per_sample_scores(task, method, scheme, scope,
-                                      test_data_dir, predictions_dir)
+                                      test_data_dir, predictions_dir, metric_space)
 
 
 # ==================== Comparison ====================
 
 def compare_methods(task, method_a, method_b, schemes, scope='perturbed_only',
                     metrics=None, n_bootstrap=10000, from_results=False,
-                    results_dir=None):
+                    results_dir=None, metric_space='token', test_data_dir=None, predictions_dir=None):
     """
     Compare two methods across all schemes.
 
@@ -281,10 +223,12 @@ def compare_methods(task, method_a, method_b, schemes, scope='perturbed_only',
 
         scores_a = get_per_sample_scores(
             task, method_a, scheme, scope,
-            from_results=from_results, results_dir=results_dir)
+            from_results=from_results, results_dir=results_dir, metric_space=metric_space,
+            test_data_dir=test_data_dir, predictions_dir=predictions_dir)
         scores_b = get_per_sample_scores(
             task, method_b, scheme, scope,
-            from_results=from_results, results_dir=results_dir)
+            from_results=from_results, results_dir=results_dir, metric_space=metric_space,
+            test_data_dir=test_data_dir, predictions_dir=predictions_dir)
 
         if scores_a is None or scores_b is None:
             print(f"    SKIP: missing data for {method_a if scores_a is None else method_b}")
@@ -297,6 +241,7 @@ def compare_methods(task, method_a, method_b, schemes, scope='perturbed_only',
 
             sa = scores_a[metric]
             sb = scores_b[metric]
+            require_paired_samples(sa, sb)
 
             if len(sa) != len(sb):
                 raise ValueError(f"Paired samples must match for {scheme}/{metric}: "
@@ -310,6 +255,9 @@ def compare_methods(task, method_a, method_b, schemes, scope='perturbed_only',
             wilcox_result = wilcoxon_test(sa, sb)
 
             scheme_results[metric] = {
+                'scoring_protocol': sa.protocol,
+                'scope': sa.scope,
+                'sample_ids': [r['sample_id'] for r in sa.records],
                 'method_a_mean': round(float(np.mean(sa)), 4),
                 'method_b_mean': round(float(np.mean(sb)), 4),
                 'paired_bootstrap': boot_result,
@@ -337,6 +285,7 @@ def main():
                         choices=['editing', 'correction', 'inpainting'])
     parser.add_argument('--scope', type=str, default='perturbed_only',
                         choices=['perturbed_only', 'full_sequence'])
+    parser.add_argument('--metric_space', choices=['token', 'decoded'], default='token')
     parser.add_argument('--schemes', type=str, default='A,B,C,D')
     parser.add_argument('--method_a', type=str, default=None,
                         help='First method to compare')
@@ -355,6 +304,8 @@ def main():
                         help='Load per-sample scores from result JSONs (requires --per_sample during eval)')
     parser.add_argument('--results_dir', type=str,
                         default=os.path.join(UNIFIED_DIR, 'results'))
+    parser.add_argument('--test_data_dir', help='Task-specific test directory, including task name')
+    parser.add_argument('--predictions_dir', help='Task-specific prediction directory, including task name')
     parser.add_argument('--output', type=str, default=None,
                         help='Output JSON file (default: results/{task}_significance_{scope}.json)')
     args = parser.parse_args()
@@ -388,14 +339,14 @@ def main():
             all_results[key] = compare_methods(
                 args.task, ma, mb, schemes, args.scope,
                 metrics, args.n_bootstrap, args.from_results,
-                args.results_dir)
+                args.results_dir, args.metric_space, args.test_data_dir, args.predictions_dir)
 
     elif args.method_a and args.method_b:
         key = f"{args.method_a}_vs_{args.method_b}"
         all_results[key] = compare_methods(
             args.task, args.method_a, args.method_b, schemes, args.scope,
             metrics, args.n_bootstrap, args.from_results,
-            args.results_dir)
+            args.results_dir, args.metric_space, args.test_data_dir, args.predictions_dir)
 
     else:
         print("ERROR: specify --method_a and --method_b, or use --all_pairs")

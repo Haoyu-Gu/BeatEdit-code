@@ -165,6 +165,12 @@ class ReleaseProtocolTests(unittest.TestCase):
             self.assertFalse(output.exists())
             for task in ('correction', 'editing', 'inpainting'):
                 fixture = {'method': 'gector', 'scheme': 'A', 'task': task,
+                           'scope': 'perturbed_only', 'num_samples': 1, 'num_errors': 0,
+                           'scoring_protocol': {'version': 'beat-aligned-v2',
+                               'beat_exact_space': 'token', 'empty_target_beats': 'include',
+                               'unmatched_beats': 'penalize'},
+                           'samples': [dict(sample_id='a.json', test_sha256='a' * 64,
+                               prediction_sha256='b' * 64, target_sha256='c' * 64)],
                            'overall': {'beat_exact_match': {'mean': .5}},
                            'per_level': {}}
                 (inputs / f'{task}_gector_A_perturbed_only.json').write_text(

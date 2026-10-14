@@ -45,8 +45,9 @@ UNIFIED_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, UNIFIED_DIR)
 
 from scheme_utils import SchemeLoader, SCHEME_INFO
+from protocol import scoring_protocol, sample_record
 from metrics import (
-    align_beats,
+    align_beats, select_beats,
     beat_exact_match, note_f1, mean_pitch_error, chroma_f1,
     rhythm_similarity, token_accuracy, context_preservation,
     compute_all_metrics, compute_fmd, safe_aggregate,
@@ -97,7 +98,7 @@ def load_bert_encoder(scheme, device='cuda'):
 def evaluate_method_scheme(method, scheme, test_data_dir, predictions_dir,
                            scope='perturbed_only', bert_model=None, device='cuda',
                            task='editing', include_per_sample=False,
-                           include_ci=True, n_bootstrap=1000):
+                           include_ci=True, n_bootstrap=1000, metric_space='token'):
     """
     Evaluate one method on one scheme.
 
@@ -122,6 +123,7 @@ def evaluate_method_scheme(method, scheme, test_data_dir, predictions_dir,
     pred_embeddings = []
     ref_embeddings = []
     errors = 0
+    samples = []
 
     for fpath in test_files:
         fname = os.path.basename(fpath)
@@ -148,22 +150,16 @@ def evaluate_method_scheme(method, scheme, test_data_dir, predictions_dir,
             _, tgt_accomp = loader.separate_tracks(tgt_parsed)
             _, pred_accomp = loader.separate_tracks(pred_parsed)
 
-            if scope == 'perturbed_only' and len(changed_indices) > 0:
-                pred_filtered, tgt_filtered = align_beats(
-                    pred_accomp, tgt_accomp, changed_indices)
-
-                # Also build changed_mask for context_preservation (all True in filtered)
-                changed_mask = [True] * len(pred_filtered)
-            else:
-                pred_filtered, tgt_filtered = align_beats(pred_accomp, tgt_accomp)
-                changed_mask = [i in changed_indices for i in range(len(tgt_filtered))]
+            pred_filtered, tgt_filtered = select_beats(
+                pred_accomp, tgt_accomp, changed_indices, scope)
+            changed_mask = [i in changed_indices for i in range(len(tgt_filtered))]
 
             m = compute_all_metrics(pred_filtered, tgt_filtered, decode_fn,
-                                    changed_mask=changed_mask if scope == 'full_sequence' else None)
+                                    changed_mask=changed_mask if scope == 'full_sequence' else None,
+                                    metric_space=metric_space)
 
             m['level'] = level
-            all_metrics.append(m)
-            level_metrics[level].append(m)
+            m['sample_id'] = fname
 
             # BERT embeddings for FMD
             if bert_model is not None:
@@ -175,6 +171,10 @@ def evaluate_method_scheme(method, scheme, test_data_dir, predictions_dir,
                 cos_sim = float(np.dot(pred_emb, ref_emb) /
                                (np.linalg.norm(pred_emb) * np.linalg.norm(ref_emb) + 1e-8))
                 m['bert_cosine_sim'] = cos_sim
+
+            samples.append(sample_record(fpath, pred_path, test_data, loader))
+            all_metrics.append(m)
+            level_metrics[level].append(m)
 
         except Exception as e:
             print(f"  ERROR evaluating {fname}: {e}")
@@ -194,6 +194,8 @@ def evaluate_method_scheme(method, scheme, test_data_dir, predictions_dir,
         'scope': scope,
         'num_samples': len(all_metrics),
         'num_errors': errors,
+        'scoring_protocol': scoring_protocol(metric_space),
+        'samples': samples,
         'overall': safe_aggregate(all_metrics, include_per_sample=include_per_sample,
                                   include_ci=include_ci, n_bootstrap=n_bootstrap),
     }
@@ -236,6 +238,8 @@ def main():
                         choices=['perturbed_only', 'full_sequence'])
     parser.add_argument('--compute_fmd', action='store_true',
                         help='Compute FMD (requires GPU, slower)')
+    parser.add_argument('--metric_space', choices=['token', 'decoded'], default='token',
+                        help='Space used for beat exact match; other metrics are unchanged')
     parser.add_argument('--device', type=str, default='cuda')
     parser.add_argument('--test_data_dir', type=str, default=None,
                         help='Test data directory (default: test_data/{task})')
@@ -307,6 +311,7 @@ def main():
                 scope=args.scope, bert_model=bert_model, device=args.device,
                 task=args.task, include_per_sample=args.per_sample,
                 include_ci=not args.no_ci, n_bootstrap=args.n_bootstrap,
+                metric_space=args.metric_space,
             )
 
             if result is not None:

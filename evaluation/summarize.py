@@ -17,6 +17,7 @@ import json
 import glob
 import argparse
 from collections import defaultdict
+from protocol import scores_from_result
 
 UNIFIED_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -37,6 +38,11 @@ def load_results(results_dir, scope='perturbed_only', task='editing'):
         # Sanity check: must have 'method' key (skip non-standard files)
         if 'method' not in data:
             continue
+        protocol = data.get('scoring_protocol', {})
+        space = protocol.get('beat_exact_space', 'token')
+        scores_from_result(data, task, data['method'], data['scheme'], scope, space)
+        if results and protocol != results[0]['scoring_protocol']:
+            raise ValueError('Cannot summarize mixed scoring protocols; use separate result directories')
         results.append(data)
     return results
 
@@ -335,6 +341,7 @@ def main():
     output_lines = [
         f"# Unified Evaluation Summary — {args.task} ({args.scope})\n",
         f"Generated from evaluation framework.\n",
+        f"Scoring protocol: {results[0]['scoring_protocol']}\n",
     ]
 
     # Main table with key metrics

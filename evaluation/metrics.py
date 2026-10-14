@@ -40,6 +40,22 @@ def align_beats(pred_beats, tgt_beats, beat_indices=None):
 def _tokens(beat):
     return beat['tokens'] if beat is not None else []
 
+
+def select_beats(pred_beats, tgt_beats, changed_indices, scope):
+    """Select all requested beats, including rests; an empty selection stays empty."""
+    if scope not in ('perturbed_only', 'full_sequence'):
+        raise ValueError('Unknown evaluation scope')
+    return align_beats(pred_beats, tgt_beats,
+                       set(changed_indices) if scope == 'perturbed_only' else None)
+
+
+def decoded_beat_exact_match(pred_beats, tgt_beats, decode_fn):
+    pred, tgt = align_beats(pred_beats, tgt_beats)
+    matches = sum(p is not None and t is not None and
+                  sorted(decode_fn(p['tokens'])) == sorted(decode_fn(t['tokens']))
+                  for p, t in zip(pred, tgt))
+    return matches / len(tgt) if tgt else 0.0
+
 def beat_exact_match(pred_beats, tgt_beats):
     """
     Beat-level token sequence exact match rate.
@@ -326,7 +342,8 @@ ALL_METRIC_KEYS = MAIN_METRIC_KEYS + [
 ]
 
 
-def compute_all_metrics(pred_beats, tgt_beats, decode_fn, changed_mask=None):
+def compute_all_metrics(pred_beats, tgt_beats, decode_fn, changed_mask=None,
+                        metric_space='token'):
     """
     Compute all metrics on accompaniment beat lists.
 
@@ -335,12 +352,17 @@ def compute_all_metrics(pred_beats, tgt_beats, decode_fn, changed_mask=None):
         tgt_beats: target accompaniment beats
         decode_fn: callable(tokens) -> list of (abs_pitch, patch_value)
         changed_mask: optional list of bools for context_preservation
+        metric_space: token or decoded beat exact match (other metrics unchanged)
 
     Returns:
         dict of metric_name -> value
     """
+    if metric_space not in ('token', 'decoded'):
+        raise ValueError('Unknown beat exact-match space')
+    bme = (beat_exact_match(pred_beats, tgt_beats) if metric_space == 'token'
+           else decoded_beat_exact_match(pred_beats, tgt_beats, decode_fn))
     result = {
-        'beat_exact_match': beat_exact_match(pred_beats, tgt_beats),
+        'beat_exact_match': bme,
         'token_accuracy': token_accuracy(pred_beats, tgt_beats, decode_fn),
         'note_f1_tol0': note_f1(pred_beats, tgt_beats, decode_fn, tol=0),
         'note_f1_tol2': note_f1(pred_beats, tgt_beats, decode_fn, tol=2),
@@ -440,7 +462,10 @@ def safe_aggregate(metrics_list, keys=None, include_per_sample=False,
                 entry['ci95_boot'] = [round(ci_lo, 4), round(ci_hi, 4)]
 
             if include_per_sample:
-                entry['per_sample'] = [round(float(v), 4) for v in values]
+                entry['per_sample'] = [float(v) for v in values]
+                if all('sample_id' in m for m in metrics_list):
+                    entry['sample_ids'] = [m['sample_id'] for m in metrics_list
+                                           if m.get(key) is not None and np.isfinite(m[key])]
 
             agg[key] = entry
     return agg

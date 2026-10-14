@@ -12,6 +12,8 @@ Supports:
 """
 
 import math
+import sys
+from pathlib import Path
 import torch
 import torch.nn.functional as F
 from typing import List, Optional, Tuple
@@ -26,6 +28,11 @@ from data.sequence_parser import (
     decode_beat, encode_beat,
 )
 from data.skeleton_builder import build_skeleton
+from data import sequence_parser as _gap_parser
+from configs import config as _gap_config
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from tagfill.inpainting import generate_gap
 from models.tagger import FELIXTagger
 from models.inserter import FELIXInserter
 
@@ -200,6 +207,23 @@ class FELIXPipeline:
 
     @torch.no_grad()
     def generate_inpainting(
+        self, token_sequence: List[int], mask_start_beat: int, mask_end_beat: int,
+        mask_track: int = 1, inserter_steps: int = 2,
+        confidence_threshold: float = 0.5, temperature: float = 1.0,
+        top_k: int = 0, harmony_weight: float = 0.0,
+    ) -> List[int]:
+        """Blank the gap, predict its length with the tagger, then fill it.
+
+        Context tokens and beat boundaries are preserved. APPEND length is
+        bounded by the trained label vocabulary, not the removed content size.
+        """
+        return generate_gap(
+            self, token_sequence, mask_start_beat, mask_end_beat, mask_track,
+            _gap_parser, _gap_config, build_skeleton, inserter_steps,
+            confidence_threshold, temperature, top_k, harmony_weight)
+
+    @torch.no_grad()
+    def generate_known_skeleton(
         self,
         token_sequence: List[int],
         mask_start_beat: int,
@@ -212,7 +236,9 @@ class FELIXPipeline:
         harmony_weight: float = 0.0,
     ) -> List[int]:
         """
-        Inpainting: skip Tagger, mask specified beat range, Inserter fills.
+        Known-length infill: skip Tagger and retain the existing token counts.
+
+        This is not blank-gap completion; use generate_inpainting for that task.
 
         Args:
             token_sequence: full token sequence (melody + accompaniment).
